@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from networks import NormalizedResnet, get_net_name, get_network
+from networks import NormalizedResnet, get_net_name, get_network, Normalization
 
 
 DEVICE = 'cpu'
@@ -54,7 +54,7 @@ def get_spec(spec, dataset):
 
 def get_net(net, net_name):
     net = get_network(DEVICE, net)
-    state_dict = torch.load('team-6/nets/%s' % net_name, map_location=torch.device(DEVICE))
+    state_dict = torch.load('../nets/%s' % net_name, map_location=torch.device(DEVICE))
     # state_dict = torch.load('../nets/%s' % net_name, map_location=torch.device(DEVICE))
     if "state_dict" in state_dict.keys():
         state_dict = state_dict["state_dict"]
@@ -69,7 +69,7 @@ def get_net(net, net_name):
 
 def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], nn.ParameterList]:
     """
-    Go through all layers of net, and get useful variables of each
+    Go through all layers of net, and get useful variables for each layer
     """
 
     layers = []
@@ -100,7 +100,7 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], nn.ParameterList]:
 
             # Initialize alpha parameter as a vector filled with zeros
             # Use 'weight' from last Liner layer, to get actual shape
-            parameter = torch.nn.Parameter(torch.zeros(weight.shape[0]))
+            parameter = torch.nn.Parameter(torch.randn(weight.shape[0]))
 
             parameters.append(parameter)
             layers.append(
@@ -111,7 +111,6 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], nn.ParameterList]:
             )
 
     return layers, parameters
-
 
 
 def compute_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
@@ -132,6 +131,8 @@ def compute_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> 
     # Iterate over every layer
     for layer in layers:
 
+        # TODO: Do normalization here?
+
         # If Linear layer
         if layer['type'] == 'linear':
 
@@ -147,13 +148,13 @@ def compute_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> 
             l_s_bias = torch.matmul(weight_pos, l_s_bias) + bias
             u_s_bias = torch.matmul(weight_pos, u_s_bias) + bias
 
+            # Get lower and upper bounds of the layer
+            l = torch.matmul(l_s_weight, l_0) + l_s_bias
+            u = torch.matmul(u_s_weight, u_0) + u_s_bias
 
         # If ReLU layer
         elif layer['type'] == 'relu':
 
-            # Get lower and upper bounds of previous (Linear) layer
-            l = torch.matmul(l_s_weight, l_0) + l_s_bias
-            u = torch.matmul(u_s_weight, u_0) + u_s_bias
 
             # Separate case ( l > 0 ) and case ( l < 0 and u > 0 )
             # (and implicitly the case ( l, u > 0 ))
@@ -167,7 +168,7 @@ def compute_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> 
             lambda_ = torch.where(u != l, u / (u - l), torch.ones_like(u))
 
             # Get ReLU resolution for weights
-            weight_l = case_1 + alpha   * case_2
+            weight_l = case_1 + alpha * case_2
             weight_u = case_1 + lambda_ * case_2
 
             l_s_weight = l_s_weight * weight_l.unsqueeze(1)
@@ -178,33 +179,39 @@ def compute_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> 
             u_s_bias += - l * lambda_ * case_2
 
             # Get lower and upper bounds
-            l = torch.matmul(l_s_weight, l_0) + l_s_bias
+            l = torch.matmul(l_s_weight, l_0)
             u = torch.matmul(u_s_weight, u_0) + u_s_bias
-
-
     return l, u
 
 
-def analyze(net, inputs, eps, true_label) -> bool:
-
+def analyze(net, inputs, eps, true_label, dataset) -> bool:
     # Initialize lower & upper bounds
-    l_0 = (inputs - eps).clamp(0, 1).flatten()
-    u_0 = (inputs + eps).clamp(0, 1).flatten()
+    l_0 = (inputs - eps).clamp(0, 1)
+    u_0 = (inputs + eps).clamp(0, 1)
+    normalization = Normalization(DEVICE, dataset)
+    l_0 = normalization(l_0).flatten()
+    u_0 = normalization(u_0).flatten()
+
+
 
     # Get an overview of layers in net
     layers, parameters = get_layers_utils(net)
     
     # Optimization
-    opt = optim.Adam(parameters, lr=1)
-
+    opt = optim.Adam(parameters, lr=100)
+    i = 0
     while time.time() - TIME_START < TIME_LIMIT:
+        i += 1
         opt.zero_grad()
 
         # Compute upper and lower bounds of last nodes using DeepPoly
+        # l, u = bound_estimator(l_0, u_0)
         l, u = compute_bounds(layers, l_0, u_0)
 
         # Get the differences between output upper bounds, and lower bound of true_label
-        diffs = l[true_label] - u
+        l_true = l[true_label]
+        others_index = torch.arange(l.shape[0]).ne(true_label)
+        diffs = l_true - u[others_index]
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         errors = diffs[diffs < 0]
@@ -220,16 +227,18 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
 
 def main():
-    # parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
-    # parser.add_argument('--net', type=str, required=True, help='Neural network architecture to be verified.')
-    # parser.add_argument('--spec', type=str, required=True, help='Test case to verify.')
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
+    parser.add_argument('--net', type=str, required=False, help='Neural network architecture to be verified.', default='net1')
+    # parser.add_argument('--net', type=str, required=False, help='Neural network architecture to be verified.', default='net2')
+    parser.add_argument('--spec', type=str, required=False, help='Test case to verify.', default='../examples/net1/img1_0.0500.txt')
+    # parser.add_argument('--spec', type=str, required=False, help='Test case to verify.', default='../examples/net1/img2_0.0550.txt')
+    args = parser.parse_args()
 
     net_name = get_net_name('net1')
     # net_name = get_net_name(args.net)
     dataset = 'mnist' if 'mnist' in net_name else 'cifar10'
     
-    inputs, true_label, eps = get_spec('team-6/examples/net1/img1_0.0500.txt', dataset)
+    inputs, true_label, eps = get_spec(args.spec, dataset)
     # inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net('net1', net_name)
     # net = get_net(args.net, net_name)
@@ -238,7 +247,7 @@ def main():
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if analyze(net, inputs, eps, true_label):
+    if analyze(net, inputs, eps, true_label, dataset):
         print('verified')
     else:
         print('not verified')
