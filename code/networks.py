@@ -120,9 +120,7 @@ def get_network(device, net):
     elif net == 'net8':
         return ResNet(BasicBlock, num_stages=1, num_blocks=2, in_planes=8, bn=False, last_layer="dense")
     elif net == 'net9':
-        return ResNet(
-            BasicBlock, num_stages=2, num_blocks=1, in_planes=16,
-            bn=True, last_layer="dense", stride=[2, 2, 2])
+        return ResNet(BasicBlock, num_stages=2, num_blocks=1, in_planes=16, bn=True, last_layer="dense", stride=[2, 2, 2])
     elif net == 'net10':
         return ResNet(BasicBlock, num_stages=2, num_blocks=2, in_planes=8, bn=False, last_layer="dense")
     assert False
