@@ -30,15 +30,14 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], List[torch.tensor]
 
             # Get weights and biases of Linear layer
             weight = layer.weight.detach()
-            bias   = layer.bias.detach()
+            bias = layer.bias.detach()
 
             layers.append(
                 {
                     'type': type_.__name__,
-                    'utils': ( weight, bias )
+                    'utils': (weight, bias)
                 }
             )
-
 
         # If ReLU layer
         elif type_ == nn.ReLU:
@@ -67,18 +66,17 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], List[torch.tensor]
 
 
         # If Flatten or Normalization layer
-        elif type_ in [ Normalization, nn.Flatten ]:
-            
+        elif type_ in [Normalization, nn.Flatten]:
+
             layers.append(
                 {
                     'type': type_.__name__,
                     'utils': layer
                 }
             )
-
+            
 
     return layers, parameters
-
 
 
 def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple[List[dict], torch.tensor, torch.tensor]:
@@ -90,7 +88,7 @@ def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) 
     for i, layer in enumerate(layers):
 
         # If Normalization or Flatten layer
-        if layer['type'] in [ Normalization.__name__, nn.Flatten.__name__ ]:
+        if layer['type'] in [Normalization.__name__, nn.Flatten.__name__]:
             layer = layer['utils']
             l_0 = layer(l_0)
             u_0 = layer(u_0)
@@ -103,9 +101,8 @@ def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) 
     return layers, l_0, u_0
 
 
-
 # To separate positive and negative coefs of a torch.tensor
-get_pos_neg = lambda t: ( F.relu(t), - F.relu(-t) )
+def get_pos_neg(t): return (F.relu(t), - F.relu(-t))
 
 
 
@@ -124,13 +121,11 @@ def compute_bounds(l_0:        torch.tensor,
     u_s_weight_pos, u_s_weight_neg = get_pos_neg(u_s_weight)
 
     # Compute bounds using lower and upper input bounds (depending on weight signs), and additional bias
-    l = torch.matmul(l_s_weight_pos, l_0) + torch.matmul(l_s_weight_neg, u_0) + l_s_bias
-    u = torch.matmul(u_s_weight_pos, u_0) + torch.matmul(u_s_weight_neg, l_0) + u_s_bias
-
-    # TODO: Sometimes raised
-    # assert (l - u).le(0).all()
+    l = torch.matmul(l_s_weight_pos, l_0) + \
+        torch.matmul(l_s_weight_neg, u_0) + l_s_bias
+    u = torch.matmul(u_s_weight_pos, u_0) + \
+        torch.matmul(u_s_weight_neg, l_0) + u_s_bias
     return l, u
-
 
 
 def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
@@ -139,13 +134,13 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
     """
 
     weight_empty = torch.diag(torch.ones_like(l_0))
-    bias_empty   = torch.zeros_like(l_0)
+    bias_empty = torch.zeros_like(l_0)
 
     # Initialize (symbolic) lower and upper bounds
     l_s_weight = weight_empty
     u_s_weight = weight_empty
-    l_s_bias   = bias_empty
-    u_s_bias   = bias_empty
+    l_s_bias = bias_empty
+    u_s_bias = bias_empty
 
     # Iterate over every layer
     for layer in layers:
@@ -196,7 +191,6 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
         # elif layer['type'] == nn.Conv2d.__name__:
         #     assert False
 
-
         # # If Normalization or Flatten layer
         # if layer['type'] in [ Normalization.__name__, nn.Flatten.__name__ ]:
         #     layer = layer['utils']
@@ -207,7 +201,6 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
     # Compute lower and upper bounds from initial bounds
     l, u = compute_bounds(l_0, u_0, l_s_weight, u_s_weight, l_s_bias, u_s_bias)
     return l, u
-
 
 
 def analyze(net, inputs, eps, true_label, dataset) -> bool:
