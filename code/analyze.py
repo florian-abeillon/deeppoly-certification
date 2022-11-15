@@ -13,6 +13,8 @@ TIME_START = time.time()
 TIME_LIMIT = 60
 
 GRADS = {}
+
+
 def store(grad, parent):
     GRADS[parent] = grad.clone()
 
@@ -33,15 +35,14 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], List[torch.tensor]
 
             # Get weights and biases of Linear layer
             weight = layer.weight.detach()
-            bias   = layer.bias.detach()
+            bias = layer.bias.detach()
 
             layers.append(
                 {
                     'type': type_.__name__,
-                    'utils': ( weight, bias )
+                    'utils': (weight, bias)
                 }
             )
-
 
         # If ReLU layer
         elif type_ == nn.ReLU:
@@ -58,20 +59,18 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], List[torch.tensor]
                 }
             )
 
-
         # If Conv layer
         elif type_ == nn.Conv2d:
-            
+
             layers.append(
                 {
                     'type': type_.__name__
                 }
             )
 
-
         # If Flatten or Normalization layer
-        elif type_ in [ Normalization, nn.Flatten ]:
-            
+        elif type_ in [Normalization, nn.Flatten]:
+
             layers.append(
                 {
                     'type': type_.__name__,
@@ -79,9 +78,7 @@ def get_layers_utils(net: nn.Sequential) -> Tuple[List[dict], List[torch.tensor]
                 }
             )
 
-
     return layers, parameters
-
 
 
 def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple[List[dict], torch.tensor, torch.tensor]:
@@ -93,7 +90,7 @@ def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) 
     for i, layer in enumerate(layers):
 
         # If Normalization or Flatten layer
-        if layer['type'] in [ Normalization.__name__, nn.Flatten.__name__ ]:
+        if layer['type'] in [Normalization.__name__, nn.Flatten.__name__]:
             layer = layer['utils']
             l_0 = layer(l_0)
             u_0 = layer(u_0)
@@ -106,14 +103,12 @@ def preprocess_bounds(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) 
     return layers, l_0, u_0
 
 
-
 # To separate positive and negative coefs of a torch.tensor
-get_pos_neg = lambda t: ( F.relu(t), - F.relu(-t) )
+def get_pos_neg(t): return (F.relu(t), - F.relu(-t))
 
 
-
-def compute_bounds(l_0:        torch.tensor, u_0:        torch.tensor, 
-                   l_s_weight: torch.tensor, u_s_weight: torch.tensor, 
+def compute_bounds(l_0:        torch.tensor, u_0:        torch.tensor,
+                   l_s_weight: torch.tensor, u_s_weight: torch.tensor,
                    l_s_bias:   torch.tensor, u_s_bias:   torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
     """
     Compute (non-symbolic) bounds
@@ -122,10 +117,11 @@ def compute_bounds(l_0:        torch.tensor, u_0:        torch.tensor,
     l_s_weight_pos, l_s_weight_neg = get_pos_neg(l_s_weight)
     u_s_weight_pos, u_s_weight_neg = get_pos_neg(u_s_weight)
     # Compute bounds using lower and upper input bounds (depending on weight signs), and additional bias
-    l = torch.matmul(l_s_weight_pos, l_0) + torch.matmul(l_s_weight_neg, u_0) + l_s_bias
-    u = torch.matmul(u_s_weight_pos, u_0) + torch.matmul(u_s_weight_neg, l_0) + u_s_bias
+    l = torch.matmul(l_s_weight_pos, l_0) + \
+        torch.matmul(l_s_weight_neg, u_0) + l_s_bias
+    u = torch.matmul(u_s_weight_pos, u_0) + \
+        torch.matmul(u_s_weight_neg, l_0) + u_s_bias
     return l, u
-
 
 
 def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple[torch.tensor, torch.tensor]:
@@ -134,13 +130,13 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
     """
 
     weight_empty = torch.diag(torch.ones_like(l_0))
-    bias_empty   = torch.zeros_like(l_0)
+    bias_empty = torch.zeros_like(l_0)
 
     # Initialize (symbolic) lower and upper bounds
     l_s_weight = weight_empty
     u_s_weight = weight_empty
-    l_s_bias   = bias_empty
-    u_s_bias   = bias_empty
+    l_s_bias = bias_empty
+    u_s_bias = bias_empty
 
     # Iterate over every layer
     for layer in layers:
@@ -150,7 +146,7 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
 
             weight, bias = layer['utils']
 
-            ## Compute symbolic bounds
+            # Compute symbolic bounds
             # Get weights of output wrt initial input
             l_s_weight = torch.matmul(weight, l_s_weight)
             u_s_weight = torch.matmul(weight, u_s_weight)
@@ -159,9 +155,9 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
             u_s_bias = torch.matmul(weight, u_s_bias) + bias
 
             # Compute lower and upper bounds from initial bounds
-            l, u = compute_bounds(l_0, u_0, l_s_weight, u_s_weight, l_s_bias, u_s_bias)
+            l, u = compute_bounds(l_0, u_0, l_s_weight,
+                                  u_s_weight, l_s_bias, u_s_bias)
 
-        
         # If ReLU layer
         elif layer['type'] == nn.ReLU.__name__:
 
@@ -169,22 +165,21 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
             # (and implicitly the case ( l, u > 0 ))
             mask_1 = l.ge(0)
             mask_2 = ~mask_1 & u.ge(0)
-            a = mask_2.any()
 
-            ## Utils
+            # Utils
             parameter = layer['utils']
-            parameter.register_hook(lambda grad:store(grad, '0 parameter'))
+            parameter.register_hook(lambda grad: store(grad, '0 parameter'))
             alpha = torch.sigmoid(parameter)
-            alpha.register_hook(lambda grad:store(grad, '1 alpha'))
+            alpha.register_hook(lambda grad: store(grad, '1 alpha'))
             # If u == l for some, replace with 1
             lambda_ = torch.where(u != l, u / (u - l), torch.ones_like(u))
 
             # Get ReLU resolution for weights
-            weight_l = mask_1 + alpha   * mask_2
-            weight_l.register_hook(lambda grad:store(grad, '2 weight_l'))
+            weight_l = mask_1 + alpha * mask_2
+            weight_l.register_hook(lambda grad: store(grad, '2 weight_l'))
             weight_u = mask_1 + lambda_ * mask_2
             l_s_weight = l_s_weight * weight_l.unsqueeze(1)
-            l_s_weight.register_hook(lambda grad:store(grad, '3 l_s_weight'))
+            l_s_weight.register_hook(lambda grad: store(grad, '3 l_s_weight'))
             u_s_weight = u_s_weight * weight_u.unsqueeze(1)
 
             # Add ReLU resolution for biases
@@ -192,15 +187,14 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
             u_s_bias -= l * lambda_ * mask_2
 
             # Compute lower and upper bounds from initial bounds
-            l, u = compute_bounds(l_0, u_0, l_s_weight, u_s_weight, l_s_bias, u_s_bias)
-            l.register_hook(lambda grad:store(grad, '4 l'))
-
+            l, u = compute_bounds(l_0, u_0, l_s_weight,
+                                  u_s_weight, l_s_bias, u_s_bias)
+            l.register_hook(lambda grad: store(grad, '4 l'))
 
         # TODO
         # If Conv layer
         elif layer['type'] == nn.Conv2d.__name__:
             assert False
-
 
         # # If Normalization or Flatten layer
         # if layer['type'] in [ Normalization.__name__, nn.Flatten.__name__ ]:
@@ -208,12 +202,10 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
         #     l = layer(l_0)
         #     u = layer(u_0)
 
-
-    l_s_weight.register_hook(lambda grad:store(grad, '5 l_s_weight final'))
-    l.register_hook(lambda grad:store(grad, '7 l final'))
+    l_s_weight.register_hook(lambda grad: store(grad, '5 l_s_weight final'))
+    l.register_hook(lambda grad: store(grad, '7 l final'))
 
     return l, u
-
 
 
 def analyze(net, inputs, eps, true_label, dataset) -> bool:
@@ -240,19 +232,19 @@ def analyze(net, inputs, eps, true_label, dataset) -> bool:
 
         # Get the differences between output upper bounds, and lower bound of true_label
         diffs = l[true_label] - u
-        diffs = torch.cat([ diffs[:true_label], diffs[true_label + 1:] ])
-        diffs.register_hook(lambda grad:store(grad, '9 diffs'))
+        diffs = torch.cat([diffs[:true_label], diffs[true_label + 1:]])
+        diffs.register_hook(lambda grad: store(grad, '9 diffs'))
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         errors = diffs[diffs < 0]
-        errors.register_hook(lambda grad:store(grad, '10 errors'))
+        errors.register_hook(lambda grad: store(grad, '10 errors'))
         if len(errors) == 0:
             return True
 
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.log(-errors).max()
         # loss = nn.MSELoss(-errors)
-        loss.register_hook(lambda grad:store(grad, '11 loss'))
+        loss.register_hook(lambda grad: store(grad, '11 loss'))
         loss.backward()
         optimizer.step()
 
