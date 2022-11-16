@@ -1,7 +1,6 @@
 
 import argparse
 import csv
-import time
 import torch
 
 from analyze import analyze
@@ -36,12 +35,6 @@ def get_spec(spec, dataset):
         inputs = inputs.to(DEVICE).to(dtype=DTYPE)
         true_label = int(label)
     inputs = inputs.unsqueeze(0)
-    # with open(spec, "r") as test_file:
-    #     test_instances = csv.reader(test_file, delimiter=",")
-    #     label, *pixel_values = next(test_instances)
-    # inputs = transform_image(pixel_values, input_dim)
-    # inputs = inputs.to(DEVICE).to(dtype=DTYPE)
-    # true_label = int(label)
     return inputs, true_label, eps
 
 
@@ -74,7 +67,7 @@ def main():
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if analyze(net, inputs, eps, true_label, dataset):
+    if analyze(net, inputs, eps, true_label):
         print('verified')
     else:
         print('not verified')
