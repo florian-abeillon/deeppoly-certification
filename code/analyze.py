@@ -36,6 +36,7 @@ def get_layers_utils(net: nn.Sequential, dataset: str) -> Tuple[List[dict], List
     """
 
     layers, parameters = [], []
+    input_dim = 28 if dataset == 'mnist' else 32
 
     for layer in net.modules():
 
@@ -79,7 +80,6 @@ def get_layers_utils(net: nn.Sequential, dataset: str) -> Tuple[List[dict], List
             padding = layer.padding[0]
             stride  = layer.stride[0]
             kernel_size = layer.kernel_size[0]
-            input_dim = 28 if dataset == 'mnist' else 32
             padded_input_dim = input_dim + 2 * padding
             in_channels = layer.in_channels
             out_channels = layer.out_channels
@@ -127,6 +127,8 @@ def get_layers_utils(net: nn.Sequential, dataset: str) -> Tuple[List[dict], List
                     'utils': (weight, bias)
                 }
             )
+
+            input_dim = out_dimensions
 
 
         # If Flatten or Normalization layer
@@ -233,24 +235,12 @@ def deep_poly(layers: List[dict], l_0: torch.tensor, u_0: torch.tensor) -> Tuple
                 u_s_bias -= mean_vec / sigma_vec
 
 
-        # If Linear layer
-        if layer['type'] == nn.Linear.__name__:
+        # If Linear or Conv layer
+        if layer['type'] in [nn.Linear.__name__, nn.Conv2d.__name__]:
 
             weight, bias = layer['utils']
 
             # Get weights of output wrt initial input
-            l_s_weight = torch.matmul(weight, l_s_weight)
-            u_s_weight = torch.matmul(weight, u_s_weight)
-
-            # Add bias of current layer
-            l_s_bias = torch.matmul(weight, l_s_bias) + bias
-            u_s_bias = torch.matmul(weight, u_s_bias) + bias
-
-        # If Conv layer
-        elif layer['type'] == nn.Conv2d.__name__:
-            weight, bias = layer['utils']
-
-            # Get weights of output
             l_s_weight = torch.matmul(weight, l_s_weight)
             u_s_weight = torch.matmul(weight, u_s_weight)
 
