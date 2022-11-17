@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import torch
+import sys
 import torch.nn as nn
 import torch.optim as optim
 
@@ -12,6 +13,20 @@ from utils import (
     get_bounds_relu
 )
 
+def get_kernel_matrix(kernel:           torch.tensor,
+                      padded_input_dim: int,
+                      output_dim:       int,
+                      stride:           int):
+    kernel_dim = kernel.shape[0]
+    kernel_matrix = torch.zeros((output_dim, padded_input_dim * kernel_dim))
+    for kernel_row in range(kernel_dim):
+        kernel_row_matrix = torch.zeros((output_dim, padded_input_dim))
+        col_offset = kernel_row * padded_input_dim
+        for row in range(output_dim):
+            row_offset = row * stride
+            kernel_row_matrix[row, row_offset:row_offset + kernel_dim] = kernel[kernel_row]
+        kernel_matrix[:, col_offset:col_offset + padded_input_dim] = kernel_row_matrix
+    return kernel_matrix
 
 
 def get_layers_utils(net:    nn.Sequential,
@@ -22,6 +37,7 @@ def get_layers_utils(net:    nn.Sequential,
     """
 
     layers, parameters = [], []
+    input_dim = 28 if dataset == 'mnist' else 32
 
     for layer in net.modules():
 
