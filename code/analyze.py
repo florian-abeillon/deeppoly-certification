@@ -37,7 +37,6 @@ def get_layers_utils(net:    nn.Sequential,
     """
 
     layers, parameters = [], []
-    input_dim = 28 if dataset == 'mnist' else 32
 
     for layer in net.modules():
 
