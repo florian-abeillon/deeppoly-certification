@@ -1,166 +1,146 @@
-from typing import Tuple
+from typing import List
 
 import torch
 import torch.nn.functional as F
 
-from .utils import compute_bounds, zero_pad
 
 
-
-def batch_convolution(b_s_weight: torch.tensor, 
-                      b_0:        torch.tensor) -> torch.tensor:
+def compute_out_dim(in_dim: int,
+                    k:      int,
+                    p:      int,
+                    s:      int) -> int:
     """
-    Convolution along several dimensions
+    Compute out_dim of Convolutional layer
     """
-    return torch.einsum('bijkl, bkl -> bij', b_s_weight, b_0)
-
-
-
-def compute_bounds_conv(l_0:        torch.tensor, 
-                        u_0:        torch.tensor, 
-                        l_s_weight: torch.tensor, 
-                        u_s_weight: torch.tensor, 
-                        l_s_bias:   torch.tensor, 
-                        u_s_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                                           torch.tensor]:
-    """
-    Compute (non-symbolic) bounds for Convolutional layer
-    """
-    return compute_bounds(l_0,
-                          u_0,
-                          l_s_weight,
-                          u_s_weight,
-                          l_s_bias,
-                          u_s_bias,
-                          batch_convolution)
-
-
-
-def get_bound_conv(weight:     torch.tensor, 
-                   b_s_weight: torch.tensor, 
-                   c_out:      int, 
-                   c_in:       int, 
-                   k:          int,
-                   p:          int,
-                   s:          int,
-                   n_in:       int,
-                   n_out:      int         ) -> torch.tensor:
-    """
-    Compute symbolic bound from Convolutional layer
-    """
+    return (in_dim + 2 * p - k) // s + 1
     
-    # Add constant 0-padding around the matrix
-    b_s_weight_padded = zero_pad(b_s_weight, p)
-    n_in += 2
-
+    
+    
+def get_kernel_block(kernel:        torch.tensor,
+                     in_dim_padded: int,
+                     out_dim:       int,
+                     k:             int,
+                     s:             int         ) -> List[torch.tensor]:
+    """
+    Build flattened convolution kernel block
+    """
     return torch.cat([
         
+        # Pad left- and right-hand sides of kernel to fill until in_dim
+        # Then flatten it out
+        F.pad(
+            kernel, 
+            ( 
+                i * s, 
+                in_dim_padded - k - i * s
+            )
+        ).flatten().unsqueeze(0)
+
+        for i in range(out_dim)
+
+    ])
+
+
+
+def get_conv_block(kernel:        torch.tensor,
+                   in_dim_padded: int,
+                   out_dim:       int,
+                   k:             int,
+                   s:             int         ) -> torch.tensor:
+    """
+    Build block from flattened kernel block
+    """
+
+    # Get flattened kernel block
+    kernel_block = get_kernel_block(kernel, in_dim_padded, out_dim, k, s)
+
+    return torch.cat([
+
+        # Pad left- and right-hand sides of conv_block to fill until in_dim^2
+        F.pad(
+            kernel_block, 
+            ( 
+                in_dim_padded * i * s, 
+                in_dim_padded * (in_dim_padded - k - i * s)
+            )
+        )
+
+        for i in range(out_dim)
+
+    ])
+
+
+
+def get_non_padding_cols(in_dim:        int,
+                         in_dim_padded: int,
+                         in_channels:   int,
+                         p:             int) -> torch.tensor:
+    """
+    Get columns from conv_matrix that do not correspond to paddings
+    """
+
+    cols = []
+
+    # For every in_channel
+    for i in range(in_channels):
+
+        # Offset to first element of in_channel
+        offset = i * in_dim_padded * in_dim_padded
+        # Offset to first non-padding row
+        offset += p * in_dim_padded 
+        # Offset to first non-padding element
+        offset += p
+
+        # Get indices of non-padding coefficients, row by row
+        for _ in range(in_dim):
+            cols += list(range(offset, 
+                               offset + in_dim))
+
+            # Offset to next row    
+            offset += in_dim_padded
+
+    return cols
+
+
+
+def get_conv_matrix(weight:  torch.tensor,
+                    in_dim:  int,
+                    out_dim: int,
+                    k:       int,
+                    p:       int,
+                    s:       int         ) -> torch.tensor:
+    """
+    Get flattened convolution matrix
+    """
+
+    # Get in-/out-channel dimensions
+    out_channels = weight.shape[0]
+    in_channels  = weight.shape[1]
+    in_dim_padded = in_dim + 2 * p
+
+    # Build conv_matrix
+    conv_matrix = torch.cat([
+
         # For every out_channel
-        torch.cat([
+        torch.cat(
+            [
 
-            # Isolate every submatrix of size (k, k)
-            torch.cat([
+                # For every in_channel
+                # Build Toeplitz-like matrix
+                get_conv_block(weight[i, j], in_dim_padded, out_dim, k, s)
+                for j in range(in_channels)
 
-                # Add padding to reconstruct padded input shape
-                # Then flatten into a list
-                F.pad(
+            ],
+            dim=1
+        )
 
-                    # Sum convolutions element-wise on all in_channels
-                    torch.sum(
-
-                        torch.cat([
-
-                            # Compute every convolution
-                            (
-                                b_s_weight_padded[b_in, i*s:i*s+k, j*s:j*s+k] * weight[b_out, b_in]
-                            ).unsqueeze(0)
-
-                            for b_in in range(c_in)
-                        
-                        ]),
-                        dim=0
-
-                    ),
-                    ( j, n_in - k - j, i, n_in - k - i ), 
-                    "constant", 
-                    0
-
-                ).unsqueeze(0)
-                # ).to_sparse().unsqueeze(0)
-
-                for j in range(n_out)
-
-            ]).unsqueeze(0)  
-            for i in range(n_out)
-
-        ]).unsqueeze(0)
-        for b_out in range(c_out)
+        for i in range(out_channels)
 
     ])
 
-
-
-def compute_n_out(n_in: int,
-                  p:    int,
-                  k:    int,
-                  s:    int) -> int:
-    """
-    Compute out_dimension of Convolutional layer
-    """
-    return (n_in + 2 * p - k) // s + 1
-
-
-
-def get_bounds_conv(weight:     torch.tensor, 
-                    bias:       torch.tensor,
-                    s:          torch.tensor,
-                    p:          torch.tensor,
-                    l_s_weight: torch.tensor,
-                    u_s_weight: torch.tensor,
-                    l_s_bias:   torch.tensor,
-                    u_s_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                                       torch.tensor, 
-                                                       torch.tensor, 
-                                                       torch.tensor]:
-    """
-    Compute symbolic bounds from Convolutional layer
-    """
-
-    c_out, c_in, k, _ = weight.shape
-    n_in = l_s_weight.shape[1]
-    n_out = compute_n_out(n_in, p, k, s)
-
-    # Get weights of output wrt initial input
-    l_s_weight = get_bound_conv(weight, l_s_weight, c_out, c_in, k, p, s, n_in, n_out)
-    u_s_weight = get_bound_conv(weight, u_s_weight, c_out, c_in, k, p, s, n_in, n_out)
-
-    # Add bias of current layer
-    bias = torch.cat([
-        torch.full(( n_out, n_out ), bias[b_out]).unsqueeze(0)
-        for b_out in range(c_out)
-    ])
-    l_s_bias = bias
-    u_s_bias = bias
-
-    return l_s_weight, u_s_weight, l_s_bias, u_s_bias
-
-
-
-def flatten_bounds(l_s_weight: torch.tensor,
-                   u_s_weight: torch.tensor,
-                   l_s_bias:   torch.tensor,
-                   u_s_bias:   torch.tensor) -> Tuple[torch.tensor,
-                                                      torch.tensor,
-                                                      torch.tensor,
-                                                      torch.tensor]:
-    """
-    Format symbolic bounds from Convolutional layer
-    """
-
-    l_s_weight = l_s_weight.flatten(end_dim=2).flatten(1).unsqueeze(0)
-    u_s_weight = u_s_weight.flatten(end_dim=2).flatten(1).unsqueeze(0)
-
-    l_s_bias = l_s_bias.flatten().unsqueeze(0)
-    u_s_bias = u_s_bias.flatten().unsqueeze(0)
-
-    return l_s_weight, u_s_weight, l_s_bias, u_s_bias
+    # Get columns corresponding to paddings
+    cols_non_padding = get_non_padding_cols(in_dim, in_dim_padded, in_channels, p)
+    # Remove columns corresponding to paddings
+    conv_matrix = conv_matrix[:, cols_non_padding]
+    
+    return conv_matrix
