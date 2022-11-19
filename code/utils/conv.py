@@ -93,8 +93,7 @@ def get_non_padding_cols(in_dim:        int,
 
         # Get indices of non-padding coefficients, row by row
         for _ in range(in_dim):
-            cols += list(range(offset, 
-                               offset + in_dim))
+            cols += list(range(offset, offset + in_dim))
 
             # Offset to next row    
             offset += in_dim_padded
@@ -126,8 +125,9 @@ def get_conv_matrix(weight:  torch.tensor,
             [
 
                 # For every in_channel
-                # Build Toeplitz-like matrix
+                # Build block from flattened kernel
                 get_conv_block(weight[i, j], in_dim_padded, out_dim, k, s)
+                
                 for j in range(in_channels)
 
             ],

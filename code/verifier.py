@@ -69,7 +69,7 @@ def main():
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if analyze(net, inputs, eps, true_label):
+    if analyze(net, inputs, eps, true_label, outs):
         print('verified')
     else:
         print('not verified')
