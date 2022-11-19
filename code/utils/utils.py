@@ -124,7 +124,7 @@ def deep_poly(l:          torch.tensor,
     
     assert (u - l).ge(0).all()
 
-    lambda_ = torch.where(u - l != 0, u / (u - l), torch.zeros_like(u))
+    lambda_ = torch.where(u - l != 0, u / (u - l + 1e-6), torch.zeros_like(u))
     weight_u = mask_1 + mask_2 * lambda_
 
     # ReLU resolution for weights
