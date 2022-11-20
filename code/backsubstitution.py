@@ -69,8 +69,10 @@ def get_layers_utils(net:    nn.Sequential,
 
             # Initialize alpha parameter as a vector filled with zeros
             parameter = torch.ones(weight.shape[0], requires_grad=True)
+            # parameter = torch.zeros(weight.shape[0], requires_grad=True)
             parameters.append(parameter)
 
+            # Add parameter to previous layer
             layers[-1]['relu_param'] = parameter
             continue
 
@@ -107,25 +109,37 @@ def get_layers_utils(net:    nn.Sequential,
 
 
 
-def get_symbolic_bounds(layers: List[dict], 
-                        l_0:    torch.tensor, 
-                        u_0:    torch.tensor, detach = False) -> Tuple[torch.tensor, 
-                                                       torch.tensor, 
-                                                       torch.tensor, 
-                                                       torch.tensor]:
+def get_symbolic_bounds(layer: dict) -> Tuple[torch.tensor, 
+                                              torch.tensor, 
+                                              torch.tensor, 
+                                              torch.tensor]:
+    """
+    Get symbolic bounds of layer
+    """
+    weight, bias = layer['weight_bias']
+    weight, bias = weight.detach(), bias.detach()
+    return weight, weight.clone(), bias, bias.clone()
+
+
+
+def get_symbolic_bounds_prev(layers:  List[dict], 
+                             l_0:     torch.tensor, 
+                             u_0:     torch.tensor, 
+                             no_grad: bool         = False) -> Tuple[torch.tensor, 
+                                                                     torch.tensor, 
+                                                                     torch.tensor, 
+                                                                     torch.tensor]:
     """
     Backsubstitute symbolic bounds on previous layer
     """
     
     # If first layer (no previous layers)
     if not layers:
-        shape = l_0.shape[0]
-        return init_symbolic_bounds(shape)
+        return init_symbolic_bounds(l_0.shape[0])
     
-    # Get symbolic bounds of layer wrt to previous layer
+    # Get symbolic bounds of current layer
     last_layer = layers[-1]
-    weight, bias = last_layer['weight_bias']
-    symbolic_bounds = ( weight, weight.clone(), bias, bias.clone() )
+    symbolic_bounds = get_symbolic_bounds(last_layer)
     
     ## If no ReLU layer aftewards
     if not 'relu_param' in last_layer:
@@ -133,44 +147,44 @@ def get_symbolic_bounds(layers: List[dict],
         
     ## If ReLU layer afterwards
     # Backsubstitute from current layer, to get numerical bounds
-    symbolic_bounds_backsub = backsubstitute(layers, l_0, u_0, detach=True)
-    numerical_bounds = get_numerical_bounds(l_0, u_0, *symbolic_bounds_backsub)
+    with torch.no_grad():
+        symbolic_bounds_prev = backsubstitute(layers, l_0, u_0, no_grad=True)
+        numerical_bounds = get_numerical_bounds(l_0, u_0, *symbolic_bounds_prev)
     
     # Update symbolic bounds using DeepPoly
     parameter = last_layer['relu_param']
-    if detach:
-        parameter = parameter.detach().clone()
-        parameter.requires_grad = False
-        
-    symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
-    
+    if no_grad:
+        with torch.no_grad():
+            symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
+    else:
+        symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
+
     return symbolic_bounds
 
 
 
-def backsubstitute(layers: List[dict], 
-                   l_0:    torch.tensor, 
-                   u_0:    torch.tensor, detach = False) -> Tuple[torch.tensor, 
-                                                  torch.tensor, 
-                                                  torch.tensor, 
-                                                  torch.tensor]:
+def backsubstitute(layers:  List[dict], 
+                   l_0:     torch.tensor, 
+                   u_0:     torch.tensor, 
+                   no_grad: bool         = False) -> Tuple[torch.tensor, 
+                                                           torch.tensor, 
+                                                           torch.tensor, 
+                                                           torch.tensor]:
     """
     Backsubstitute symbolic bounds on every layer
     """
     
     # Initialize symbolic bounds
-    last_layer = layers[-1]
-    weight, bias = last_layer['weight_bias']
-    symbolic_bounds = ( weight, weight.clone(), bias, bias.clone() )
+    symbolic_bounds = get_symbolic_bounds(layers[-1])
 
     # Iterate over every layer (backwards)
     for i in range(len(layers)):
         
         # Get symbolic bounds of layer wrt to previous layer
         prev_layers = layers[:-i-1]
-        symbolic_bounds_prev = get_symbolic_bounds(prev_layers, l_0, u_0, detach=detach)
+        symbolic_bounds_prev = get_symbolic_bounds_prev(prev_layers, l_0, u_0, no_grad=no_grad)
         
         # Update symbolic bounds with those of layer
         symbolic_bounds = backsubstitution_step(*symbolic_bounds_prev, *symbolic_bounds)
-        
+
     return symbolic_bounds

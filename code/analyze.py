@@ -77,8 +77,8 @@ def analyze(net, inputs, eps, true_label, outs) -> bool:
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.max(torch.log(-errors))
         # loss = torch.sqrt(torch.sum(torch.square(errors)))
-        loss.backward(retain_graph=True)
-        # loss.backward()
+        # loss.backward(retain_graph=True)
+        loss.backward()
         optimizer.step()
 
         if i % 10 == 0:
