@@ -62,10 +62,10 @@ def backsubstitution_step(l_s_weight_prev: torch.tensor,
                  torch.matmul(u_s_weight_neg, l_s_weight_prev)
 
     # Update biases
-    l_s_bias += torch.matmul(l_s_weight_pos, l_s_bias_prev) + \
-                torch.matmul(l_s_weight_neg, u_s_bias_prev)
-    u_s_bias += torch.matmul(u_s_weight_pos, u_s_bias_prev) + \
-                torch.matmul(u_s_weight_neg, l_s_bias_prev)
+    l_s_bias = l_s_bias + torch.matmul(l_s_weight_pos, l_s_bias_prev) + \
+                          torch.matmul(l_s_weight_neg, u_s_bias_prev)
+    u_s_bias = u_s_bias + torch.matmul(u_s_weight_pos, u_s_bias_prev) + \
+                          torch.matmul(u_s_weight_neg, l_s_bias_prev)
 
     return l_s_weight, u_s_weight, l_s_bias, u_s_bias
 
@@ -120,20 +120,19 @@ def deep_poly(l:          torch.tensor,
     mask_2 = ~mask_1 & u.gt(0)
 
     alpha = torch.sigmoid(parameter)
-    weight_l = mask_1 + mask_2 * alpha
+    weight_l = mask_1 + torch.mul(mask_2, alpha)
     
     assert (u - l).ge(0).all()
 
     lambda_ = torch.where(u - l != 0, u / (u - l + 1e-6), torch.zeros_like(u))
-    weight_u = mask_1 + mask_2 * lambda_
+    weight_u = mask_1 + torch.mul(mask_2, lambda_)
 
     # ReLU resolution for weights
-    l_s_weight *= weight_l.unsqueeze(1)
-    u_s_weight *= weight_u.unsqueeze(1)
+    l_s_weight = l_s_weight * weight_l.unsqueeze(1)
+    u_s_weight = u_s_weight * weight_u.unsqueeze(1)
 
     # ReLU resolution for biases
-    l_s_bias *= weight_l
-    u_s_bias -= mask_2 * l
-    u_s_bias *= weight_u
+    l_s_bias = l_s_bias                * weight_l
+    u_s_bias = (u_s_bias - mask_2 * l) * weight_u
 
     return l_s_weight, u_s_weight, l_s_bias, u_s_bias
