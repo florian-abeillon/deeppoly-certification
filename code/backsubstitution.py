@@ -3,6 +3,8 @@ from typing import List, Tuple
 import torch
 import torch.nn as nn
 
+from uuid import uuid4
+
 from networks import Normalization
 from resnet import BasicBlock
 from utils import (
@@ -22,7 +24,7 @@ def get_layers_utils(net:    nn.Sequential,
     Get utils from every layer of net
     """
 
-    layers, parameters = [], []
+    layers, parameters = [], {}
 
     for layer in net.modules():
         
@@ -66,14 +68,15 @@ def get_layers_utils(net:    nn.Sequential,
 
         # If ReLU layer
         elif type_ == nn.ReLU:
-
+            
+            id = str(uuid4())
             # Initialize alpha parameter as a vector filled with zeros
             parameter = torch.ones(weight.shape[0], requires_grad=True)
             # parameter = torch.zeros(weight.shape[0], requires_grad=True)
-            parameters.append(parameter)
+            parameters[id] = parameter
 
             # Add parameter to previous layer
-            layers[-1]['relu_param'] = parameter
+            layers[-1]['relu_param_id'] = id
             continue
 
 
@@ -103,6 +106,7 @@ def get_layers_utils(net:    nn.Sequential,
 
 
         layers.append(utils)
+        parameters = nn.ParameterDict(parameters)
         
 
     return layers, parameters, in_dim
@@ -142,7 +146,7 @@ def get_symbolic_bounds_prev(layers:  List[dict],
     symbolic_bounds = get_symbolic_bounds(last_layer)
     
     ## If no ReLU layer aftewards
-    if not 'relu_param' in last_layer:
+    if not 'relu_param_id' in last_layer:
         return symbolic_bounds
         
     ## If ReLU layer afterwards
@@ -152,7 +156,8 @@ def get_symbolic_bounds_prev(layers:  List[dict],
         numerical_bounds = get_numerical_bounds(l_0, u_0, *symbolic_bounds_prev)
     
     # Update symbolic bounds using DeepPoly
-    parameter = last_layer['relu_param']
+    parameter_id = last_layer['relu_param_id']
+    parameter = parameters[parameter_id]
     if no_grad:
         with torch.no_grad():
             symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
