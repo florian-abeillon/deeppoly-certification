@@ -157,6 +157,7 @@ def get_symbolic_bounds_prev(layers:  List[dict],
         with torch.no_grad():
             symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
     else:
+        # Numerical bounds still have grad?
         symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
 
     return symbolic_bounds
