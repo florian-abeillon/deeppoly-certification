@@ -139,8 +139,8 @@ def get_conv_matrix(weight:  torch.tensor,
     ])
 
     # Get columns corresponding to paddings
-    cols_non_padding = get_non_padding_cols(in_dim, in_dim_padded, in_channels, p)
+    non_padding_cols = get_non_padding_cols(in_dim, in_dim_padded, in_channels, p)
     # Remove columns corresponding to paddings
-    conv_matrix = conv_matrix[:, cols_non_padding]
+    conv_matrix = conv_matrix[:, non_padding_cols]
     
     return conv_matrix

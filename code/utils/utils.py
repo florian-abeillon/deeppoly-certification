@@ -31,28 +31,28 @@ def get_pos_neg(t: torch.tensor) -> Tuple[torch.tensor,
 
 
 
-def get_numerical_bounds(l_0:        torch.tensor, 
-                         u_0:        torch.tensor, 
-                         l_s_weight: torch.tensor, 
-                         u_s_weight: torch.tensor, 
-                         l_s_bias:   torch.tensor, 
-                         u_s_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                                            torch.tensor]:
+def get_numerical_bounds(l_0:      torch.tensor, 
+                         u_0:      torch.tensor, 
+                         l_weight: torch.tensor, 
+                         u_weight: torch.tensor, 
+                         l_bias:   torch.tensor, 
+                         u_bias:   torch.tensor) -> Tuple[torch.tensor, 
+                                                          torch.tensor]:
     """
     Compute numerical bounds from symbolic ones
     """
 
     # Get positive and negative weights
-    l_s_weight_pos, l_s_weight_neg = get_pos_neg(l_s_weight)
-    u_s_weight_pos, u_s_weight_neg = get_pos_neg(u_s_weight)
+    l_weight_pos, l_weight_neg = get_pos_neg(l_weight)
+    u_weight_pos, u_weight_neg = get_pos_neg(u_weight)
     
     # Compute lower numerical bound
-    l = torch.matmul(l_s_weight_pos, l_0) + \
-        torch.matmul(l_s_weight_neg, u_0) + l_s_bias
+    l = torch.matmul(l_weight_pos, l_0) + \
+        torch.matmul(l_weight_neg, u_0) + l_bias
 
     # Compute upper numerical bound
-    u = torch.matmul(u_s_weight_pos, u_0) + \
-        torch.matmul(u_s_weight_neg, l_0) + u_s_bias
+    u = torch.matmul(u_weight_pos, u_0) + \
+        torch.matmul(u_weight_neg, l_0) + u_bias
 
     # TODO: To remove
     assert (u - l).ge(0).all()
@@ -61,16 +61,16 @@ def get_numerical_bounds(l_0:        torch.tensor,
 
 
 
-def deep_poly(l:          torch.tensor, 
-              u:          torch.tensor,
-              parameter:  torch.tensor,
-              l_s_weight: torch.tensor,
-              u_s_weight: torch.tensor,
-              l_s_bias:   torch.tensor,
-              u_s_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                                 torch.tensor, 
-                                                 torch.tensor, 
-                                                 torch.tensor]:
+def deep_poly(l:        torch.tensor, 
+              u:        torch.tensor,
+              param:    torch.tensor,
+              l_weight: torch.tensor,
+              u_weight: torch.tensor,
+              l_bias:   torch.tensor,
+              u_bias:   torch.tensor) -> Tuple[torch.tensor, 
+                                               torch.tensor, 
+                                               torch.tensor, 
+                                               torch.tensor]:
     """
     Compute symbolic bounds from ReLU layer
     """
@@ -80,21 +80,21 @@ def deep_poly(l:          torch.tensor,
     mask_1 = l.ge(0)
     mask_2 = ~mask_1 & u.gt(0)
 
-    alpha = torch.sigmoid(parameter)
-    weight_l = mask_1 + mask_2 * alpha
+    alpha = torch.sigmoid(param)
+    mask_l = mask_1 + mask_2 * alpha
     
     # TODO: To remove
     assert (u - l).ge(0).all()
 
     lambda_ = u / (u - l)
-    weight_u = mask_1 + mask_2 * lambda_
+    mask_u = mask_1 + mask_2 * lambda_
 
     # ReLU resolution for weights
-    l_s_weight = l_s_weight * weight_l.unsqueeze(1)
-    u_s_weight = u_s_weight * weight_u.unsqueeze(1)
+    l_weight = l_weight * mask_l.unsqueeze(1)
+    u_weight = u_weight * mask_u.unsqueeze(1)
 
     # ReLU resolution for biases
-    l_s_bias = l_s_bias                * weight_l
-    u_s_bias = (u_s_bias - mask_2 * l) * weight_u
+    l_bias = l_bias                * mask_l
+    u_bias = (u_bias - mask_2 * l) * mask_u
 
-    return l_s_weight, u_s_weight, l_s_bias, u_s_bias
+    return l_weight, u_weight, l_bias, u_bias

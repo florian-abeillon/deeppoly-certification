@@ -23,7 +23,7 @@ def get_layers_utils(net:    nn.Sequential,
     Get utils from every layer of net
     """
 
-    layers, parameters = [], []
+    layers, params = [], []
 
     for layer in net.modules():
         
@@ -69,11 +69,11 @@ def get_layers_utils(net:    nn.Sequential,
         elif type_ == nn.ReLU:
             
             # Initialize alpha parameter as a vector filled with zeros
-            parameter = torch.zeros(weight.shape[0], requires_grad=True)
-            parameters.append(parameter)
+            param = torch.zeros(weight.shape[0], requires_grad=True)
+            params.append(param)
 
             # Add parameter to previous layer
-            layers[-1]['relu_param'] = parameter
+            layers[-1]['relu_param'] = param
             continue
 
 
@@ -87,12 +87,12 @@ def get_layers_utils(net:    nn.Sequential,
         elif type_ == BasicBlock.__name__:
 
             # Get utils from both path of ResidualBlock
-            path_a, parameters_a, _      = get_layers_utils(layer.path_a, in_dim)
-            path_b, parameters_b, in_dim = get_layers_utils(layer.path_b, in_dim)
+            path_a, params_a, _      = get_layers_utils(layer.path_a, in_dim)
+            path_b, params_b, in_dim = get_layers_utils(layer.path_b, in_dim)
 
             # Add their parameters to the list of tracked parameters
-            parameters.extend(parameters_a)
-            parameters.extend(parameters_b)
+            params.extend(params_a)
+            params.extend(params_b)
 
             utils['path_a'] = path_a
             utils['path_b'] = path_b
@@ -105,7 +105,7 @@ def get_layers_utils(net:    nn.Sequential,
         layers.append(utils)
     
 
-    return layers, parameters, in_dim
+    return layers, params, in_dim
 
 
 
@@ -144,7 +144,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Get an overview of layers in net
     in_dim = inputs.shape[2]
-    layers, parameters, _ = get_layers_utils(net, in_dim)
+    layers, params, _ = get_layers_utils(net, in_dim)
 
     # Initialize lower and upper bounds
     l_0 = (inputs - eps).clamp(0, 1)
@@ -152,7 +152,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
     layers, l_0, u_0 = preprocess_bounds(layers, l_0, u_0)
 
     # Optimization
-    optimizer = optim.Adam(parameters, lr=1)
+    optimizer = optim.Adam(params, lr=1)
 
     # TODO: To remove
     i = 0
@@ -170,13 +170,13 @@ def analyze(net, inputs, eps, true_label) -> bool:
         diffs = torch.cat([ diffs[:true_label], diffs[true_label + 1:] ])
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
-        errors = diffs[diffs < 0]
-        if len(errors) == 0:
+        err = diffs[diffs < 0]
+        if len(err) == 0:
             print(i)
             return True
 
         # Compute loss, and backpropagate to learn alpha parameters
-        loss = torch.max(torch.log(-errors))
+        loss = torch.max(torch.log(-err))
         # loss = torch.sqrt(torch.sum(torch.square(errors)))
         loss.backward()
         optimizer.step()
@@ -184,7 +184,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
         # TODO: To remove
         if i % 10 == 0:
             print(i)
-            print(errors.data)
+            print(err.data)
             print(loss.data)
             print()
         i+= 1

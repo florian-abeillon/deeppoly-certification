@@ -9,42 +9,42 @@ from utils import (
 
 
 
-def backsubstitution_step(l_s_weight_prev: torch.tensor,
-                          u_s_weight_prev: torch.tensor,
-                          l_s_bias_prev:   torch.tensor,
-                          u_s_bias_prev:   torch.tensor,
-                          l_s_weight:      torch.tensor, 
-                          u_s_weight:      torch.tensor, 
-                          l_s_bias:        torch.tensor, 
-                          u_s_bias:        torch.tensor) -> Tuple[torch.tensor, 
-                                                                  torch.tensor, 
-                                                                  torch.tensor, 
-                                                                  torch.tensor]:
+def backsubstitution_step(prev_l_weight: torch.tensor,
+                          prev_u_weight: torch.tensor,
+                          prev_l_bias:   torch.tensor,
+                          prev_u_bias:   torch.tensor,
+                          l_weight:      torch.tensor, 
+                          u_weight:      torch.tensor, 
+                          l_bias:        torch.tensor, 
+                          u_bias:        torch.tensor) -> Tuple[torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor, 
+                                                                torch.tensor]:
     """
     Backpropagate symbolic bounds using ReLU ones
     """
 
     # Get positive and negative weights
-    l_s_weight_pos, l_s_weight_neg = get_pos_neg(l_s_weight)
-    u_s_weight_pos, u_s_weight_neg = get_pos_neg(u_s_weight)
+    l_weight_pos, l_weight_neg = get_pos_neg(l_weight)
+    u_weight_pos, u_weight_neg = get_pos_neg(u_weight)
 
     # Update weights
-    l_s_weight = torch.matmul(l_s_weight_pos, l_s_weight_prev) + \
-                 torch.matmul(l_s_weight_neg, u_s_weight_prev)
-    u_s_weight = torch.matmul(u_s_weight_pos, u_s_weight_prev) + \
-                 torch.matmul(u_s_weight_neg, l_s_weight_prev)
+    l_weight = torch.matmul(l_weight_pos, prev_l_weight) + \
+               torch.matmul(l_weight_neg, prev_u_weight)
+    u_weight = torch.matmul(u_weight_pos, prev_u_weight) + \
+               torch.matmul(u_weight_neg, prev_l_weight)
 
     # Update biases
-    l_s_bias = l_s_bias + torch.matmul(l_s_weight_pos, l_s_bias_prev) + \
-                          torch.matmul(l_s_weight_neg, u_s_bias_prev)
-    u_s_bias = u_s_bias + torch.matmul(u_s_weight_pos, u_s_bias_prev) + \
-                          torch.matmul(u_s_weight_neg, l_s_bias_prev)
+    l_bias = l_bias + torch.matmul(l_weight_pos, prev_l_bias) + \
+                      torch.matmul(l_weight_neg, prev_u_bias)
+    u_bias = u_bias + torch.matmul(u_weight_pos, prev_u_bias) + \
+                      torch.matmul(u_weight_neg, prev_l_bias)
 
-    return l_s_weight, u_s_weight, l_s_bias, u_s_bias
+    return l_weight, u_weight, l_bias, u_bias
 
 
 
-def get_symbolic_bounds_prev(layers:  List[dict], 
+def get_prev_symbolic_bounds(layers:  List[dict], 
                              l_0:     torch.tensor, 
                              u_0:     torch.tensor) -> Tuple[torch.tensor, 
                                                              torch.tensor, 
@@ -67,12 +67,12 @@ def get_symbolic_bounds_prev(layers:  List[dict],
         
     ## If ReLU layer afterwards
     # Backsubstitute from current layer, to get numerical bounds
-    symbolic_bounds_prev = backsubstitute(layers, l_0, u_0)
-    numerical_bounds = get_numerical_bounds(l_0, u_0, *symbolic_bounds_prev)
+    prev_symbolic_bounds = backsubstitute(layers, l_0, u_0)
+    numerical_bounds = get_numerical_bounds(l_0, u_0, *prev_symbolic_bounds)
     
     # Update symbolic bounds using DeepPoly
-    parameter = last_layer['relu_param']
-    symbolic_bounds = deep_poly(*numerical_bounds, parameter, *symbolic_bounds)
+    param = last_layer['relu_param']
+    symbolic_bounds = deep_poly(*numerical_bounds, param, *symbolic_bounds)
 
     return symbolic_bounds
 
@@ -97,9 +97,9 @@ def backsubstitute(layers:  List[dict],
         
         # Get symbolic bounds of layer wrt to previous layer
         prev_layers = layers[:-i]
-        symbolic_bounds_prev = get_symbolic_bounds_prev(prev_layers, l_0, u_0)
+        prev_symbolic_bounds = get_prev_symbolic_bounds(prev_layers, l_0, u_0)
         
         # Update symbolic bounds with those of layer
-        symbolic_bounds = backsubstitution_step(*symbolic_bounds_prev, *symbolic_bounds)
+        symbolic_bounds = backsubstitution_step(*prev_symbolic_bounds, *symbolic_bounds)
 
     return symbolic_bounds
