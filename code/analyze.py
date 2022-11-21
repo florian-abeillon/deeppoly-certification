@@ -1,4 +1,5 @@
 from typing import List, Tuple
+import time
 
 import torch
 import torch.nn as nn
@@ -179,8 +180,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # TODO: To remove
     i = 0
-    while i < 1000:
-    # while time.time() - TIME_START < TIME_LIMIT:
+    # while i < 1000:
+    while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
         # Get lower and upper symbolic bounds using DeepPoly
