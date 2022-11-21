@@ -86,7 +86,7 @@ def deep_poly(l:        torch.tensor,
     mask_l = mask_1 + mask_2 * alpha
     
     # TODO: To remove
-    assert (u - l).ge(0).all()
+    assert u.ge(l).all()
 
     lambda_ = u / (u - l)
     mask_u = mask_1 + mask_2 * lambda_

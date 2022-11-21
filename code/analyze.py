@@ -33,36 +33,33 @@ def get_layers_utils(net:    nn.Sequential,
         }
 
 
-        # If Linear layer
-        if type_ == nn.Linear:
+        # If Linear or Convolutional layer
+        if type_ in [ nn.Linear, nn.Conv2d ]:
 
             weight = layer.weight.detach()
             bias = layer.bias.detach()
 
+            # If Convolutional layer
+            if type_ == nn.Conv2d:
+
+                p = layer.padding[0]
+                s = layer.stride[0]
+
+                # Compute out_dim
+                k = weight.shape[2]
+                out_dim = compute_out_dim(in_dim, k, p, s)
+
+                # Get flattened convolutional matrix, and bias
+                weight = get_conv_matrix(weight, in_dim, out_dim, k, p, s)
+                bias = bias.repeat_interleave(out_dim * out_dim)
+
+                in_dim = out_dim
+
+            else:
+                
+                in_dim = weight.shape[0]
+
             utils['weight_bias'] = ( weight, bias )
-
-            in_dim = weight.shape[0]
-
-
-        # If Convolutional layer
-        elif type_ == nn.Conv2d:
-
-            weight = layer.weight.detach()
-            bias = layer.bias.detach()
-            p = layer.padding[0]
-            s = layer.stride[0]
-
-            # Compute out_dim
-            k = weight.shape[2]
-            out_dim = compute_out_dim(in_dim, k, p, s)
-
-            # Get flattened convolutional matrix, and bias
-            weight = get_conv_matrix(weight, in_dim, out_dim, k, p, s)
-            bias = bias.repeat_interleave(out_dim * out_dim)
-
-            utils['weight_bias'] = ( weight, bias )
-
-            in_dim = out_dim
 
 
         # If ReLU layer
@@ -103,10 +100,35 @@ def get_layers_utils(net:    nn.Sequential,
 
 
         layers.append(utils)
-    
+
 
     return layers, params, in_dim
 
+
+
+
+def add_final_layer(layers:     List[dict], 
+                    out_dim:    int,
+                    true_label: int       ) -> List[dict]:
+    """
+    Artificially add a final layer, to subtract the true_label output node to every other output node
+    """
+
+    # -1 on diagonal, and 1 for true_label
+    final_weight = -torch.eye(out_dim)
+    final_weight[:, true_label] = 1.
+    final_weight = torch.cat([ final_weight[:true_label], final_weight[true_label + 1:] ])
+
+    # No bias
+    final_bias = torch.zeros((out_dim - 1,))
+
+    final_layer = {
+        'type': nn.Linear.__name__,
+        'weight_bias': ( final_weight, final_bias )
+    }
+    layers.append(final_layer)
+    
+    return layers
 
 
 
@@ -144,7 +166,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Get an overview of layers in net
     in_dim = inputs.shape[2]
-    layers, params, _ = get_layers_utils(net, in_dim)
+    layers, params, out_dim = get_layers_utils(net, in_dim)
+    layers = add_final_layer(layers, out_dim, true_label)
 
     # Initialize lower and upper bounds
     l_0 = (inputs - eps).clamp(0, 1)
@@ -162,21 +185,16 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
         # Get lower and upper symbolic bounds using DeepPoly
         symbolic_bounds = backsubstitute(layers, l_0, u_0)
-        # Using them, compute lower and upper numerical bounds
-        l, u = get_numerical_bounds(l_0, u_0, *symbolic_bounds)
-
-        # Get the differences between output upper bounds, and lower bound of true_label
-        diffs = l[true_label] - u
-        diffs = torch.cat([ diffs[:true_label], diffs[true_label + 1:] ])
+        # Using them, compute lower numerical bound of final_layer
+        l, _ = get_numerical_bounds(l_0, u_0, *symbolic_bounds)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
-        err = diffs[diffs < 0]
-        if len(err) == 0:
+        if l.gt(0).all():
             print(i)
             return True
 
         # Compute loss, and backpropagate to learn alpha parameters
-        loss = torch.max(torch.log(-err))
+        loss = torch.log(torch.max(-l))
         # loss = torch.sqrt(torch.sum(torch.square(errors)))
         loss.backward()
         optimizer.step()
@@ -184,7 +202,6 @@ def analyze(net, inputs, eps, true_label) -> bool:
         # TODO: To remove
         if i % 10 == 0:
             print(i)
-            print(err.data)
             print(loss.data)
             print()
         i+= 1

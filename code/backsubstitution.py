@@ -40,18 +40,15 @@ def backsubstitution_step(prev_l_weight: torch.tensor,
 
 
 
-def get_prev_symbolic_bounds(layers:  List[dict], 
-                             l_0:     torch.tensor, 
-                             u_0:     torch.tensor) -> Tuple[torch.tensor, 
-                                                             torch.tensor, 
-                                                             torch.tensor, 
-                                                             torch.tensor]:
+def get_prev_symbolic_bounds(layers: List[dict], 
+                             l_0:    torch.tensor, 
+                             u_0:    torch.tensor) -> Tuple[torch.tensor, 
+                                                            torch.tensor, 
+                                                            torch.tensor, 
+                                                            torch.tensor]:
     """
     Backsubstitute symbolic bounds on previous layer
     """
-
-    # TODO: To remove
-    assert layers
     
     # Get symbolic bounds of current layer
     last_layer = layers[-1]
@@ -74,12 +71,12 @@ def get_prev_symbolic_bounds(layers:  List[dict],
 
 
 
-def backsubstitute(layers:  List[dict], 
-                   l_0:     torch.tensor, 
-                   u_0:     torch.tensor) -> Tuple[torch.tensor, 
-                                                   torch.tensor, 
-                                                   torch.tensor, 
-                                                   torch.tensor]:
+def backsubstitute(layers: List[dict], 
+                   l_0:    torch.tensor, 
+                   u_0:    torch.tensor) -> Tuple[torch.tensor, 
+                                                  torch.tensor, 
+                                                  torch.tensor, 
+                                                  torch.tensor]:
     """
     Backsubstitute symbolic bounds on every layer
     """
