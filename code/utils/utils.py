@@ -31,6 +31,18 @@ def get_pos_neg(t: torch.tensor) -> Tuple[torch.tensor,
 
 
 
+def backsubstitute_bound(weight:          torch.tensor, 
+                         prev_weight:     torch.tensor, 
+                         prev_weight_inv: torch.tensor) -> torch.tensor:
+    """
+    Backsubstitute bound using previous weights
+    """
+    weight_pos, weight_neg = get_pos_neg(weight)
+    return torch.matmul(weight_pos, prev_weight) + \
+           torch.matmul(weight_neg, prev_weight_inv)
+
+
+
 def get_numerical_bounds(l_0:      torch.tensor, 
                          u_0:      torch.tensor, 
                          l_weight: torch.tensor, 
@@ -41,18 +53,8 @@ def get_numerical_bounds(l_0:      torch.tensor,
     """
     Compute numerical bounds from symbolic ones
     """
-
-    # Get positive and negative weights
-    l_weight_pos, l_weight_neg = get_pos_neg(l_weight)
-    u_weight_pos, u_weight_neg = get_pos_neg(u_weight)
-    
-    # Compute lower numerical bound
-    l = torch.matmul(l_weight_pos, l_0) + \
-        torch.matmul(l_weight_neg, u_0) + l_bias
-
-    # Compute upper numerical bound
-    u = torch.matmul(u_weight_pos, u_0) + \
-        torch.matmul(u_weight_neg, l_0) + u_bias
+    l = backsubstitute_bound(l_weight, l_0, u_0) + l_bias
+    u = backsubstitute_bound(u_weight, u_0, l_0) + u_bias
 
     # TODO: To remove
     assert (u - l).ge(0).all()

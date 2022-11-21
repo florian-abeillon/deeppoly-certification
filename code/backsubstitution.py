@@ -3,8 +3,8 @@ from typing import List, Tuple
 import torch
 
 from utils import (
-    deep_poly, get_numerical_bounds,
-    get_pos_neg, get_symbolic_bounds
+    backsubstitute_bound, deep_poly, 
+    get_numerical_bounds, get_symbolic_bounds
 )
 
 
@@ -24,22 +24,18 @@ def backsubstitution_step(prev_l_weight: torch.tensor,
     Backpropagate symbolic bounds using ReLU ones
     """
 
-    # Get positive and negative weights
-    l_weight_pos, l_weight_neg = get_pos_neg(l_weight)
-    u_weight_pos, u_weight_neg = get_pos_neg(u_weight)
+    # Update lower bounds
+    l_weight, l_bias = (
+        backsubstitute_bound(l_weight, prev_l_weight, prev_u_weight),
+        backsubstitute_bound(l_weight, prev_l_bias, prev_u_bias) + l_bias
+    )
 
-    # Update weights
-    l_weight = torch.matmul(l_weight_pos, prev_l_weight) + \
-               torch.matmul(l_weight_neg, prev_u_weight)
-    u_weight = torch.matmul(u_weight_pos, prev_u_weight) + \
-               torch.matmul(u_weight_neg, prev_l_weight)
-
-    # Update biases
-    l_bias = l_bias + torch.matmul(l_weight_pos, prev_l_bias) + \
-                      torch.matmul(l_weight_neg, prev_u_bias)
-    u_bias = u_bias + torch.matmul(u_weight_pos, prev_u_bias) + \
-                      torch.matmul(u_weight_neg, prev_l_bias)
-
+    # Update upper bounds
+    u_weight, u_bias = (
+        backsubstitute_bound(u_weight, prev_u_weight, prev_l_weight),
+        backsubstitute_bound(u_weight, prev_u_bias, prev_l_bias) + u_bias
+    )
+    
     return l_weight, u_weight, l_bias, u_bias
 
 
