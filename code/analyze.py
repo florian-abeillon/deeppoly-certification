@@ -38,7 +38,10 @@ def get_layers_utils(net:    nn.Sequential,
         if type_ in [ nn.Linear, nn.Conv2d ]:
 
             weight = layer.weight.detach()
-            bias = layer.bias.detach()
+            # Networks with batchnorm have no bias
+            bias = False
+            if layer.bias is not None:
+                bias = layer.bias.detach()
 
             # If Convolutional layer
             if type_ == nn.Conv2d:
@@ -52,7 +55,10 @@ def get_layers_utils(net:    nn.Sequential,
 
                 # Get flattened convolutional matrix, and bias
                 weight = get_conv_matrix(weight, in_dim, out_dim, k, p, s)
-                bias = bias.repeat_interleave(out_dim * out_dim)
+                if bias:
+                    bias = bias.repeat_interleave(out_dim * out_dim)
+                else:
+                    bias = torch.zeros(weight.shape[0])
 
                 in_dim = out_dim
 
@@ -76,9 +82,27 @@ def get_layers_utils(net:    nn.Sequential,
 
 
         # If Normalization layer
-        elif type_ in [ Normalization, nn.BatchNorm2d ]:
+        elif type_ == Normalization:
 
             utils['layer'] = layer
+
+        elif type_ == nn.BatchNorm2d:
+            mean = layer.running_mean.detach()
+            prev_layer = layers[-1]
+            prev_weight, prev_bias = prev_layer['weight_bias']
+            var = layer.running_var.detach()
+            eps = layer.eps
+            gamma = layer.weight.detach()
+            bias = layer.bias.detach()
+
+            scale = gamma / torch.sqrt(var + eps)
+            shift = bias - mean * scale
+            scale_extended = scale.repeat_interleave(in_dim * in_dim)
+            shift_extended = shift.repeat_interleave(in_dim * in_dim)
+            prev_weight *= scale_extended.unsqueeze(1)
+            prev_bias += shift_extended
+
+            prev_layer['weight_bias'] = (prev_weight, prev_bias)
 
             
         # If ResidualBlock
@@ -94,7 +118,6 @@ def get_layers_utils(net:    nn.Sequential,
 
             utils['path_a'] = path_a
             utils['path_b'] = path_b
-
 
         else:
             continue
