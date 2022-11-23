@@ -50,8 +50,32 @@ def get_prev_symbolic_bounds(layers: List[dict],
     Backsubstitute symbolic bounds on previous layer
     """
     
-    # Get symbolic bounds of current layer
     last_layer = layers[-1]
+
+    # If Residual block
+    if 'prev_path' in last_layer:
+
+        # Get symbolic bounds before Residual block
+        prev_symbolic_bounds = backsubstitute(last_layer['prev_path'], l_0, u_0)
+
+        # Get symbolic bounds for each path (independently of everything else)
+        symbolic_bounds_a = backsubstitute(last_layer['path_a'], l_0, u_0)
+        symbolic_bounds_b = backsubstitute(last_layer['path_b'], l_0, u_0)
+
+        # Get the real symbolic bounds of each path, by multiplying them with those of path before Residual block
+        symbolic_bounds_a = backsubstitution_step(*prev_symbolic_bounds, *symbolic_bounds_a)
+        symbolic_bounds_b = backsubstitution_step(*prev_symbolic_bounds, *symbolic_bounds_b)
+
+        # Add up the symbolic bounds of the two paths
+        symbolic_bounds = ( 
+            symbolic_bound_a + symbolic_bound_b 
+            for symbolic_bound_a, symbolic_bound_b in zip(symbolic_bounds_a, symbolic_bounds_b) 
+        )
+
+        return symbolic_bounds
+
+
+    # Get symbolic bounds of current layer
     symbolic_bounds = get_symbolic_bounds(last_layer)
     
     ## If no ReLU layer aftewards

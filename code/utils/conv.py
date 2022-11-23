@@ -102,19 +102,18 @@ def get_non_padding_cols(in_dim:        int,
 
 
 
-def get_conv_matrix(weight:  torch.tensor,
-                    in_dim:  int,
-                    out_dim: int,
-                    k:       int,
-                    p:       int,
-                    s:       int         ) -> torch.tensor:
+def get_conv_matrix(weight:    torch.tensor,
+                    in_dim:    int,
+                    out_dim:   int,
+                    in_chans:  int,
+                    out_chans: int,
+                    k:         int,
+                    p:         int,
+                    s:         int         ) -> torch.tensor:
     """
     Get flattened convolution matrix
     """
 
-    # Get in-/out-channel dimensions
-    out_channels = weight.shape[0]
-    in_channels  = weight.shape[1]
     in_dim_padded = in_dim + 2 * p
 
     # Build conv_matrix
@@ -128,18 +127,18 @@ def get_conv_matrix(weight:  torch.tensor,
                 # Build block from flattened kernel
                 get_conv_block(weight[i, j], in_dim_padded, out_dim, k, s)
                 
-                for j in range(in_channels)
+                for j in range(in_chans)
 
             ],
             dim=1
         )
 
-        for i in range(out_channels)
+        for i in range(out_chans)
 
     ])
 
     # Get columns corresponding to paddings
-    non_padding_cols = get_non_padding_cols(in_dim, in_dim_padded, in_channels, p)
+    non_padding_cols = get_non_padding_cols(in_dim, in_dim_padded, in_chans, p)
     # Remove columns corresponding to paddings
     conv_matrix = conv_matrix[:, non_padding_cols]
     

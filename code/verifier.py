@@ -40,9 +40,9 @@ def get_spec(spec, dataset):
 
 def get_net(net, net_name):
     net = get_network(DEVICE, net)
-    # state_dict = torch.load('team-6/nets/%s' % net_name, map_location=torch.device(DEVICE))
+    state_dict = torch.load('team-6/nets/%s' % net_name, map_location=torch.device(DEVICE))
     # TODO: Uncomment before pushing
-    state_dict = torch.load('../nets/%s' % net_name, map_location=torch.device(DEVICE))
+    # state_dict = torch.load('../nets/%s' % net_name, map_location=torch.device(DEVICE))
     if "state_dict" in state_dict.keys():
         state_dict = state_dict["state_dict"]
     net.load_state_dict(state_dict)
