@@ -2,6 +2,7 @@ from typing import List, Tuple
 
 import torch
 
+from resnet import BasicBlock
 from utils import (
     backsubstitute_bound, deep_poly, 
     get_numerical_bounds
@@ -51,7 +52,7 @@ def get_symbolic_bounds(layer: dict,
     """
 
     # If Residual block
-    if 'path_a' in layer:
+    if layer['type'] == BasicBlock.__name__:
 
         # Get symbolic bounds for each path (independently of everything else)
         symbolic_bounds_a = backsubstitute(layer['path_a'], l_0, u_0)
