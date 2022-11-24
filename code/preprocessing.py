@@ -148,11 +148,7 @@ def get_layers_utils(net:      nn.Sequential,
         # If Linear layer
         if type_ == nn.Linear:
 
-            # TODO: To remove
-            assert in_chans == 1
-
             weight, bias = get_utils_linear(layer)
-            in_dim = None               # No more in_dim with Linear layers
             in_dim_flat = weight.shape[0]
 
             utils['weight_bias'] = ( weight, bias )
@@ -184,9 +180,6 @@ def get_layers_utils(net:      nn.Sequential,
 
             utils['weight_bias'] = get_utils_norm(layer, in_dim)
 
-            # TODO: To remove
-            utils['layer'] = layer
-
 
         # If Batch normalization layer
         elif type_ == nn.BatchNorm2d:
@@ -211,9 +204,8 @@ def get_layers_utils(net:      nn.Sequential,
             layers.append(utils_identity)
 
             # Get utils from both path of ResidualBlock
-            path_a, params_a, *_               = get_layers_utils(layer.path_a, in_dim, in_chans)
-            path_b, params_b, in_dim, in_chans = get_layers_utils(layer.path_b, in_dim, in_chans)
-            in_dim_flat = get_in_dim_flat(in_chans, in_dim)
+            path_a, params_a, *_                            = get_layers_utils(layer.path_a, in_dim, in_chans)
+            path_b, params_b, in_dim, in_chans, in_dim_flat = get_layers_utils(layer.path_b, in_dim, in_chans)
 
             # Add their parameters to the list of tracked parameters
             params.extend(params_a)
@@ -233,13 +225,13 @@ def get_layers_utils(net:      nn.Sequential,
 
 
         # TODO: Find better way?
-        if to_skip > 0:
-            to_skip -= 1
-        else:
+        if to_skip == 0:
             layers.append(utils)
+        else:
+            to_skip -= 1
 
 
-    return layers, params, in_dim, in_chans
+    return layers, params, in_dim, in_chans, in_dim_flat
 
 
 
@@ -278,24 +270,18 @@ def preprocess_bounds(layers: List[dict],
     Preprocess lower and upper bounds for every input node
     """
     
-    # # Flatten initial bounds
-    # l_0 = l_0.flatten()
-    # u_0 = u_0.flatten()
+    # Flatten initial bounds
+    l_0 = l_0.flatten()
+    u_0 = u_0.flatten()
 
     # If first layer is a Normalization layer
     first_layer = layers[0]
 
     if first_layer['type'] == Normalization.__name__:
 
-        # TODO: Make it work
         weight, bias = first_layer ['weight_bias']
-        l_1 = torch.matmul(weight, l_0.flatten()) + bias
-        u_1 = torch.matmul(weight, u_0.flatten()) + bias
-
-        # Normalize initial bounds
-        normalize = first_layer['layer']
-        l_0 = normalize(l_0)
-        u_0 = normalize(u_0)
+        l_0 = torch.matmul(weight, l_0.flatten()) + bias
+        u_0 = torch.matmul(weight, u_0.flatten()) + bias
 
         # Remove normalization layer
         layers = layers[1:]

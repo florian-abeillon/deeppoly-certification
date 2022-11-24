@@ -18,8 +18,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Get an overview of layers in net
     in_chans, in_dim = inputs.shape[1], inputs.shape[2]
-    layers, params, out_dim, _ = get_layers_utils(net, in_dim, in_chans)
-    layers = add_final_layer(layers, out_dim, true_label)
+    layers, params, _, _, out_dim_flat = get_layers_utils(net, in_dim, in_chans)
+    layers = add_final_layer(layers, out_dim_flat, true_label)
 
     # Initialize lower and upper bounds
     l_0 = (inputs - eps).clamp(0, 1)
