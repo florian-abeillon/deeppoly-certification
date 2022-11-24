@@ -19,13 +19,11 @@ def get_in_dim_flat(in_dim:   int,
 
 
 
-def get_utils_identity(in_dim:   int,
-                       in_chans: int) -> Tuple[torch.tensor,
-                                               torch.tensor]:
+def get_utils_identity(in_dim_flat: int) -> Tuple[torch.tensor,
+                                                  torch.tensor]:
     """
     Get utils for Identity layer
     """
-    in_dim_flat = get_in_dim_flat(in_dim, in_chans)
     weight = torch.eye(in_dim_flat)
     bias = torch.zeros(in_dim_flat)
     return weight, bias
@@ -40,8 +38,7 @@ def get_utils_linear(layer: nn.Module) -> Tuple[torch.tensor,
     """
     weight = layer.weight.detach()
     bias = layer.bias.detach()
-    in_dim = weight.shape[0]
-    return weight, bias, in_dim
+    return weight, bias
 
 
 
@@ -135,6 +132,8 @@ def get_layers_utils(net:      nn.Sequential,
     Get utils from every layer of net
     """
 
+    in_dim_flat = get_in_dim_flat(in_chans, in_dim)
+
     layers, params = [], []
     to_skip = 0
 
@@ -149,7 +148,13 @@ def get_layers_utils(net:      nn.Sequential,
         # If Linear layer
         if type_ == nn.Linear:
 
-            weight, bias, in_dim = get_utils_linear(layer)
+            # TODO: To remove
+            assert in_chans == 1
+
+            weight, bias = get_utils_linear(layer)
+            in_dim = None               # No more in_dim with Linear layers
+            in_dim_flat = weight.shape[0]
+
             utils['weight_bias'] = ( weight, bias )
 
         
@@ -157,6 +162,8 @@ def get_layers_utils(net:      nn.Sequential,
         elif type_ == nn.Conv2d:
 
             weight, bias, in_dim, in_chans = get_utils_conv(layer, in_dim)
+            in_dim_flat = weight.shape[0]
+
             utils['weight_bias'] = ( weight, bias )
 
 
@@ -164,7 +171,6 @@ def get_layers_utils(net:      nn.Sequential,
         elif type_ == nn.ReLU:
             
             # Initialize alpha parameter as a vector filled with zeros
-            in_dim_flat = get_in_dim_flat(in_dim, in_chans)
             param = torch.zeros(in_dim_flat, requires_grad=True)
             params.append(param)
 
@@ -191,7 +197,7 @@ def get_layers_utils(net:      nn.Sequential,
         # If Identity layer
         elif type_ == nn.Identity:
 
-            utils['weight_bias'] = get_utils_identity(in_dim, in_chans)
+            utils['weight_bias'] = get_utils_identity(in_dim_flat)
 
             
         # If Residual block
@@ -200,13 +206,14 @@ def get_layers_utils(net:      nn.Sequential,
             # Add Identity layer before BasicBlock to have a layer with weight/bias
             utils_identity = {
                 'type': nn.Identity.__name__,
-                'weight_bias': get_utils_identity(in_dim, in_chans)
+                'weight_bias': get_utils_identity(in_dim_flat)
             }
             layers.append(utils_identity)
 
             # Get utils from both path of ResidualBlock
             path_a, params_a, *_               = get_layers_utils(layer.path_a, in_dim, in_chans)
             path_b, params_b, in_dim, in_chans = get_layers_utils(layer.path_b, in_dim, in_chans)
+            in_dim_flat = get_in_dim_flat(in_chans, in_dim)
 
             # Add their parameters to the list of tracked parameters
             params.extend(params_a)
@@ -219,14 +226,6 @@ def get_layers_utils(net:      nn.Sequential,
 
             # To skip the layers that were already captured in the Residual block
             to_skip = len(path_a) + len(path_b) + 1
-
-            
-        # If Flatten layer
-        elif type_ == nn.Flatten:
-
-            in_dim = in_chans * in_dim**2
-            in_chans = 1
-            continue
 
 
         else:
