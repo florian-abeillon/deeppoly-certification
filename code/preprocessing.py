@@ -141,6 +141,12 @@ def get_layers_utils(net:      nn.Sequential,
     for layer in net.modules():
         
         type_ = type(layer)
+
+        # TODO: Find better way?
+        if to_skip > 0 and type_ in [ nn.Linear, nn.Conv2d, Normalization, nn.BatchNorm2d, BasicBlock ]:
+            to_skip -= 1
+            continue
+
         utils = {
             'type': type_.__name__
         }
@@ -215,7 +221,7 @@ def get_layers_utils(net:      nn.Sequential,
             utils['path_b'] = layers + path_b
 
             # Reset layers (previous path already encapsulated in path_a and path_b)
-            layers = []
+            layers = [utils]
 
             # Add Identity layer before BasicBlock to have a layer with weight/bias
             utils_identity = {
@@ -224,7 +230,7 @@ def get_layers_utils(net:      nn.Sequential,
             }
             # layers.append(utils_identity)
 
-            layers.append(utils)
+            # layers.append(utils)
 
             # To skip the layers that were already captured in the Residual block
             to_skip = len(path_a) + len(path_b) + 1
@@ -242,11 +248,7 @@ def get_layers_utils(net:      nn.Sequential,
             continue
 
 
-        # TODO: Find better way?
-        if to_skip == 0:
-            layers.append(utils)
-        else:
-            to_skip -= 1
+        layers.append(utils)
 
 
     return layers, params, in_dim, in_chans, in_dim_flat

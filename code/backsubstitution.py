@@ -60,10 +60,10 @@ def get_prev_symbolic_bounds(layers: List[dict],
         symbolic_bounds_b = backsubstitute(last_layer['path_b'], l_0, u_0)
 
         # Add up the symbolic bounds of the two paths
-        symbolic_bounds = ( 
+        symbolic_bounds = tuple([
             symbolic_bound_a + symbolic_bound_b 
             for symbolic_bound_a, symbolic_bound_b in zip(symbolic_bounds_a, symbolic_bounds_b) 
-        )
+        ])
 
         return symbolic_bounds
 
@@ -74,6 +74,7 @@ def get_prev_symbolic_bounds(layers: List[dict],
     ## If no ReLU layer aftewards
     if not 'relu_param' in last_layer:
         return symbolic_bounds
+        
         
     ## If ReLU layer afterwards
     # Backsubstitute from current layer, to get numerical bounds
