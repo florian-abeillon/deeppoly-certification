@@ -221,19 +221,10 @@ def get_layers_utils(net:      nn.Sequential,
             utils['path_b'] = layers + path_b
 
             # Reset layers (previous path already encapsulated in path_a and path_b)
-            layers = [utils]
-
-            # Add Identity layer before BasicBlock to have a layer with weight/bias
-            utils_identity = {
-                'type': nn.Identity.__name__,
-                'weight_bias': get_utils_identity(in_dim_flat)
-            }
-            # layers.append(utils_identity)
-
-            # layers.append(utils)
+            layers = []
 
             # To skip the layers that were already captured in the Residual block
-            to_skip = len(path_a) + len(path_b) + 1
+            to_skip = len(path_a) + len(path_b)
 
 
         # If Flatten layer

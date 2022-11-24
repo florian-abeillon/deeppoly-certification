@@ -10,18 +10,6 @@ TIME_LIMIT = 60
 
 
 
-def get_symbolic_bounds(layer: dict) -> Tuple[torch.tensor, 
-                                              torch.tensor, 
-                                              torch.tensor, 
-                                              torch.tensor]:
-    """
-    Get symbolic bounds of layer
-    """
-    weight, bias = layer['weight_bias']
-    return weight, weight.clone(), bias, bias.clone()
-
-
-
 def get_pos_neg(t: torch.tensor) -> Tuple[torch.tensor, 
                                           torch.tensor]:
     """
