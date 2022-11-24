@@ -39,13 +39,6 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
         sym_bounds = get_bounds(layers, l_0, u_0)
         l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
-        # sym_bounds = backsubstitution(layers)
-        # l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
-
-        # # Get lower and upper symbolic bounds using DeepPoly
-        # symbolic_bounds = backsubstitute(layers, l_0, u_0)
-        # # Using them, compute lower numerical bound of final_layer
-        # l, _ = get_numerical_bounds(l_0, u_0, *symbolic_bounds)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
@@ -55,7 +48,6 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.log(-err)
-        # loss = torch.sqrt(torch.sum(torch.square(errors)))
         loss.backward()
         optimizer.step()
 

@@ -55,7 +55,7 @@ def backsubsitute(layer:           dict,
     # If Residual block
     if layer['type'] == BasicBlock.__name__:
 
-        # Get symbolic bounds for each path (independently of everything else)
+        # Get symbolic bounds for each path
         sym_bounds_a = get_bounds(layer['path_a'], *num_bounds, prev_sym_bounds=prev_sym_bounds)
         sym_bounds_b = get_bounds(layer['path_b'], *num_bounds, prev_sym_bounds=prev_sym_bounds)
 
@@ -72,13 +72,18 @@ def backsubsitute(layer:           dict,
         weight, bias = layer['weight_bias']
         sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
         
+        # Backsubsitute using previous layer's backsubstituted bounds
         if prev_sym_bounds:
             sym_bounds = backsubstitute_step(*prev_sym_bounds, *sym_bounds)
 
+        # If layer is followed by a ReLU layer
         if 'relu_param' in layer:
 
+            # Get numerical bounds so far
             num_bounds = get_numerical_bounds(*num_bounds, *sym_bounds)
             param = layer['relu_param']
+
+            # Get symbolic bounds using DeepPoly ReLU approximation
             sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
         
 
@@ -97,10 +102,13 @@ def get_bounds(layers:          List[dict],
     Get symbolic bounds of last layer
     """
     
+    # Initialize bounds
     sym_bounds = prev_sym_bounds
     num_bounds = ( l_0, u_0 )
 
+    # Iterate over every layer
     for layer in layers:
+        # Get symbolic bounds for each
         sym_bounds = backsubsitute(layer, sym_bounds, num_bounds)
 
     return sym_bounds
