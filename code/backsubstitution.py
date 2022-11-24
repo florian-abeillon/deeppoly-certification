@@ -10,17 +10,17 @@ from utils import (
 
 
 
-def backsubstitution_step(prev_l_weight: torch.tensor,
-                          prev_u_weight: torch.tensor,
-                          prev_l_bias:   torch.tensor,
-                          prev_u_bias:   torch.tensor,
-                          l_weight:      torch.tensor, 
-                          u_weight:      torch.tensor, 
-                          l_bias:        torch.tensor, 
-                          u_bias:        torch.tensor) -> Tuple[torch.tensor, 
-                                                                torch.tensor, 
-                                                                torch.tensor, 
-                                                                torch.tensor]:
+def backsubstitute_step(prev_l_weight: torch.tensor,
+                        prev_u_weight: torch.tensor,
+                        prev_l_bias:   torch.tensor,
+                        prev_u_bias:   torch.tensor,
+                        l_weight:      torch.tensor, 
+                        u_weight:      torch.tensor, 
+                        l_bias:        torch.tensor, 
+                        u_bias:        torch.tensor) -> Tuple[torch.tensor, 
+                                                              torch.tensor, 
+                                                              torch.tensor, 
+                                                              torch.tensor]:
     """
     Backpropagate symbolic bounds using ReLU ones
     """
@@ -41,91 +41,66 @@ def backsubstitution_step(prev_l_weight: torch.tensor,
 
 
 
-def get_symbolic_bounds(layer: dict,
-                        l_0:   torch.tensor,
-                        u_0:   torch.tensor) -> Tuple[torch.tensor, 
-                                                      torch.tensor, 
-                                                      torch.tensor, 
-                                                      torch.tensor]:
+def backsubsitute(layer:           dict,
+                  prev_sym_bounds: tuple, 
+                  num_bounds:      Tuple[torch.tensor,
+                                         torch.tensor]) -> Tuple[torch.tensor, 
+                                                                 torch.tensor, 
+                                                                 torch.tensor, 
+                                                                 torch.tensor]:
     """
-    Get symbolic bounds of layer
+    Backsubsitute symbolic bounds using the ones from previous layer
     """
 
     # If Residual block
     if layer['type'] == BasicBlock.__name__:
 
         # Get symbolic bounds for each path (independently of everything else)
-        symbolic_bounds_a = backsubstitute(layer['path_a'], l_0, u_0)
-        symbolic_bounds_b = backsubstitute(layer['path_b'], l_0, u_0)
+        sym_bounds_a = get_bounds(layer['path_a'], *num_bounds, prev_sym_bounds=prev_sym_bounds)
+        sym_bounds_b = get_bounds(layer['path_b'], *num_bounds, prev_sym_bounds=prev_sym_bounds)
 
         # Add up the symbolic bounds of the two paths
-        symbolic_bounds = tuple([
-            symbolic_bound_a + symbolic_bound_b 
-            for symbolic_bound_a, symbolic_bound_b in zip(symbolic_bounds_a, symbolic_bounds_b) 
+        sym_bounds = tuple([
+            sym_bound_a + sym_bound_b 
+            for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b) 
         ])
-
-        return symbolic_bounds
     
-    # If another type of layer (encoded as a weight/bias)
-    weight, bias = layer['weight_bias']
-    return weight, weight.clone(), bias, bias.clone()
+
+    # If another type of layer (encoded with a weight/bias)
+    else:
+
+        weight, bias = layer['weight_bias']
+        sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
+        
+        if prev_sym_bounds:
+            sym_bounds = backsubstitute_step(*prev_sym_bounds, *sym_bounds)
+
+        if 'relu_param' in layer:
+
+            num_bounds = get_numerical_bounds(*num_bounds, *sym_bounds)
+            param = layer['relu_param']
+            sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
+        
+
+    return sym_bounds
 
 
 
-def get_prev_symbolic_bounds(layers: List[dict], 
-                             l_0:    torch.tensor, 
-                             u_0:    torch.tensor) -> Tuple[torch.tensor, 
+def get_bounds(layers:          List[dict], 
+               l_0:             torch.tensor, 
+               u_0:             torch.tensor,
+               prev_sym_bounds: tuple        = ()) -> Tuple[torch.tensor, 
                                                             torch.tensor, 
                                                             torch.tensor, 
                                                             torch.tensor]:
     """
-    Backsubstitute symbolic bounds on previous layer
-    """
-
-    # Get symbolic bounds of current layer    
-    last_layer = layers[-1]
-    symbolic_bounds = get_symbolic_bounds(last_layer, l_0, u_0)
-    
-    ## If no ReLU layer aftewards
-    if not 'relu_param' in last_layer:
-        return symbolic_bounds
-
-        
-    ## If ReLU layer afterwards
-    # Backsubstitute from current layer, to get numerical bounds
-    prev_symbolic_bounds = backsubstitute(layers, l_0, u_0)
-    numerical_bounds = get_numerical_bounds(l_0, u_0, *prev_symbolic_bounds)
-    
-    # Update symbolic bounds using DeepPoly
-    param = last_layer['relu_param']
-    symbolic_bounds = deep_poly(*numerical_bounds, param, *symbolic_bounds)
-
-    return symbolic_bounds
-
-
-
-def backsubstitute(layers: List[dict], 
-                   l_0:    torch.tensor, 
-                   u_0:    torch.tensor) -> Tuple[torch.tensor, 
-                                                  torch.tensor, 
-                                                  torch.tensor, 
-                                                  torch.tensor]:
-    """
-    Backsubstitute symbolic bounds on every layer
+    Get symbolic bounds of last layer
     """
     
-    # Initialize symbolic bounds
-    last_layer = layers[-1]
-    symbolic_bounds = get_symbolic_bounds(last_layer, l_0, u_0)
+    sym_bounds = prev_sym_bounds
+    num_bounds = ( l_0, u_0 )
 
-    # Iterate over every layer (backwards)
-    for i in range(1, len(layers)):
-        
-        # Get symbolic bounds of layer wrt to previous layer
-        prev_layers = layers[:-i]
-        prev_symbolic_bounds = get_prev_symbolic_bounds(prev_layers, l_0, u_0)
-        
-        # Update symbolic bounds with those of layer
-        symbolic_bounds = backsubstitution_step(*prev_symbolic_bounds, *symbolic_bounds)
+    for layer in layers:
+        sym_bounds = backsubsitute(layer, sym_bounds, num_bounds)
 
-    return symbolic_bounds
+    return sym_bounds

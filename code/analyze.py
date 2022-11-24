@@ -2,7 +2,7 @@ import time
 import torch
 import torch.optim as optim
 
-from backsubstitution import backsubstitute
+from backsubstitution import get_bounds
 from preprocessing import (
     add_final_layer, get_layers_utils, 
     preprocess_bounds
@@ -37,10 +37,15 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
-        # Get lower and upper symbolic bounds using DeepPoly
-        symbolic_bounds = backsubstitute(layers, l_0, u_0)
-        # Using them, compute lower numerical bound of final_layer
-        l, _ = get_numerical_bounds(l_0, u_0, *symbolic_bounds)
+        sym_bounds = get_bounds(layers, l_0, u_0)
+        l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
+        # sym_bounds = backsubstitution(layers)
+        # l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
+
+        # # Get lower and upper symbolic bounds using DeepPoly
+        # symbolic_bounds = backsubstitute(layers, l_0, u_0)
+        # # Using them, compute lower numerical bound of final_layer
+        # l, _ = get_numerical_bounds(l_0, u_0, *symbolic_bounds)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
@@ -55,10 +60,10 @@ def analyze(net, inputs, eps, true_label) -> bool:
         optimizer.step()
 
         # TODO: To remove
-        if i % 10 == 0:
-            print(i)
-            print(loss.data)
-            print()
+        # if i % 10 == 0:
+        print(i)
+        print(loss.data)
+        print()
         i+= 1
 
     return False

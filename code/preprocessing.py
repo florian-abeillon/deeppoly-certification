@@ -199,12 +199,6 @@ def get_layers_utils(net:      nn.Sequential,
 
             utils['weight_bias'] = get_utils_batch_norm(layer, in_dim)
 
-
-        # # If Identity layer
-        # elif type_ == nn.Identity:
-
-        #     utils['weight_bias'] = get_utils_identity(in_dim_flat)
-
             
         # If Residual block
         elif type_ == BasicBlock:
@@ -217,11 +211,9 @@ def get_layers_utils(net:      nn.Sequential,
             params.extend(params_a)
             params.extend(params_b)
 
-            utils['path_a'] = layers + path_a
-            utils['path_b'] = layers + path_b
-
-            # Reset layers (previous path already encapsulated in path_a and path_b)
-            layers = []
+            utils['prev_path'] = layers.copy()
+            utils['path_a'] = path_a
+            utils['path_b'] = path_b
 
             # To skip the layers that were already captured in the Residual block
             to_skip = len(path_a) + len(path_b)
