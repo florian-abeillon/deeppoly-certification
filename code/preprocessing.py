@@ -53,7 +53,7 @@ def get_utils_conv(layer:  nn.Module,
     """
 
     weight = layer.weight.detach()
-    bias = layer.bias.detach()
+    bias = layer.bias.detach() if layer.bias is not None else torch.zeros(weight.shape[0])
     p = layer.padding[0]
     s = layer.stride[0]
 
@@ -143,7 +143,7 @@ def get_layers_utils(net:      nn.Sequential,
         type_ = type(layer)
 
         # TODO: Find better way?
-        if to_skip > 0 and type_ in [ nn.Linear, nn.Conv2d, Normalization, nn.BatchNorm2d, BasicBlock ]:
+        if to_skip > 0 and type_ in [ nn.Linear, nn.Conv2d, Normalization, nn.BatchNorm2d, nn.Identity, BasicBlock ]:
             to_skip -= 1
             continue
 
@@ -198,6 +198,15 @@ def get_layers_utils(net:      nn.Sequential,
         elif type_ == nn.BatchNorm2d:
 
             utils['weight_bias'] = get_utils_batch_norm(layer, in_dim)
+
+
+        # If Identity layer
+        elif type_ == nn.Identity:
+
+            weight = torch.eye(in_dim_flat)
+            bias = torch.zeros(in_dim_flat)
+
+            utils['weight_bias'] = ( weight, bias )
 
             
         # If Residual block

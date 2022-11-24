@@ -53,10 +53,10 @@ def analyze(net, inputs, eps, true_label) -> bool:
         optimizer.step()
 
         # TODO: To remove
-        if i % 10 == 0:
-            print(i)
-            print(loss.data)
-            print()
+        # if i % 10 == 0:
+        print(i)
+        print(loss.data)
+        print()
         i+= 1
 
     return False

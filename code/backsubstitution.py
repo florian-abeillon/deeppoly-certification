@@ -44,10 +44,7 @@ def backsubstitute_step(prev_l_weight: torch.tensor,
 def add_bounds(layer:           dict,
                prev_layers: List[dict], 
                l_0:         torch.tensor, 
-               u_0:         torch.tensor) -> Tuple[torch.tensor, 
-                                                   torch.tensor, 
-                                                   torch.tensor, 
-                                                   torch.tensor]:
+               u_0:         torch.tensor) -> None:
     """
     Backsubsitute symbolic bounds using the ones from previous layer
     """
@@ -55,12 +52,12 @@ def add_bounds(layer:           dict,
     # If Residual block
     if layer['type'] == BasicBlock.__name__:
 
-        path_a = prev_layers + layer['path_a']
-        path_b = prev_layers + layer['path_b']
-
         # Get symbolic bounds for each path
-        sym_bounds_a = get_bounds(path_a, l_0, u_0)
-        sym_bounds_b = get_bounds(path_b, l_0, u_0)
+        get_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
+        get_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
+
+        sym_bounds_a = backsubstitute(layer['path_a'])
+        sym_bounds_b = backsubstitute(layer['path_b'])
 
         # Add up the symbolic bounds of the two paths
         sym_bounds = tuple([
@@ -96,17 +93,20 @@ def add_bounds(layer:           dict,
 
 
 
-def get_bounds(layers: List[dict], 
-               l_0:    torch.tensor, 
-               u_0:    torch.tensor) -> None:
+def get_bounds(layers:      List[dict], 
+               l_0:         torch.tensor, 
+               u_0:         torch.tensor,
+               prev_layers: List[dict]   = []) -> None:
     """
     Get symbolic bounds of last layer
     """
 
+    prev_layers = prev_layers.copy()
+
     # Get symbolic bounds of every layer
-    for i, layer in enumerate(layers):
-        prev_layers = layers[:i]
+    for layer in layers:
         add_bounds(layer, prev_layers, l_0, u_0)
+        prev_layers.append(layer)
 
 
 
@@ -118,10 +118,10 @@ def backsubstitute(layers: List[dict]) -> Tuple[torch.tensor,
     Backsubstitute from last to first layer
     """
 
-    *layers, last_layer = layers
+    last_layer = layers[-1]
     sym_bounds = last_layer['sym_bounds']
 
-    for layer in reversed(layers):
+    for layer in reversed(layers[:-1]):
         sym_bounds = backsubstitute_step(*layer['sym_bounds'], *sym_bounds)
 
     return sym_bounds
