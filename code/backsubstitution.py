@@ -41,7 +41,7 @@ def backsubstitute_step(prev_l_weight: torch.tensor,
 
 
 
-def add_bounds(layer:           dict,
+def add_bounds(layer:       dict,
                prev_layers: List[dict], 
                l_0:         torch.tensor, 
                u_0:         torch.tensor) -> None:
@@ -80,6 +80,7 @@ def add_bounds(layer:           dict,
             sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
 
 
+        # Add symbolic bound to layer element (to be used later on)
         layer['sym_bounds'] = sym_bounds
 
 
@@ -115,23 +116,28 @@ def backsubstitute(layers:     List[dict],
         # If Residual block
         if layer['type'] == BasicBlock.__name__:
 
+            # Create two independent paths that go from current layer to input layer
             i_lim = len(layers) - i - 1
             prev_layers = layers[:i_lim]
             path_a = prev_layers + layer['path_a']
             path_b = prev_layers + layer['path_b']
 
+            # Backsubstitute each path independently
             sym_bounds_a = backsubstitute(path_a, sym_bounds=sym_bounds)
             sym_bounds_b = backsubstitute(path_b, sym_bounds=sym_bounds)
 
+            # Add symbolic bounds
             sym_bounds = tuple((
                 sym_bound_a + sym_bound_b
                 for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b)
             ))
 
+            # Return already (as the two paths went all the way to the input layer)
             return sym_bounds
 
             
         # If another type of layer (encoded with sym_bounds)
+        # Get symbolic bounds directly
         elif sym_bounds:
             sym_bounds = backsubstitute_step(*layer['sym_bounds'], *sym_bounds)
 
