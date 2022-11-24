@@ -69,9 +69,9 @@ def get_utils_conv(layer:  nn.Module,
 
 
 
-def get_utils_norm(layer:    nn.Module, 
-                   in_dim:   int      ) -> Tuple[torch.tensor,
-                                                 torch.tensor]:
+def get_utils_norm(layer:  nn.Module, 
+                   in_dim: int      ) -> Tuple[torch.tensor,
+                                               torch.tensor]:
     """
     Get utils for Normalization layer
     """
@@ -95,9 +95,9 @@ def get_utils_norm(layer:    nn.Module,
 
 
 
-def get_utils_batch_norm(layer:    nn.Module, 
-                         in_dim:   int      ) -> Tuple[torch.tensor,
-                                                       torch.tensor]:
+def get_utils_batch_norm(layer:  nn.Module, 
+                         in_dim: int      ) -> Tuple[torch.tensor,
+                                                     torch.tensor]:
     """
     Get utils for Batch normalization layer
     """

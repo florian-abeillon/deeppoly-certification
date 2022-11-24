@@ -52,18 +52,9 @@ def add_bounds(layer:           dict,
     # If Residual block
     if layer['type'] == BasicBlock.__name__:
 
-        # Get symbolic bounds for each path
+        # Add symbolic bounds to each element of both paths
         get_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
         get_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
-
-        sym_bounds_a = backsubstitute(layer['path_a'])
-        sym_bounds_b = backsubstitute(layer['path_b'])
-
-        # Add up the symbolic bounds of the two paths
-        sym_bounds = tuple([
-            sym_bound_a + sym_bound_b 
-            for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b) 
-        ])
     
 
     # If another type of layer (encoded with a weight/bias)
@@ -89,7 +80,7 @@ def add_bounds(layer:           dict,
             sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
 
 
-    layer['sym_bounds'] = sym_bounds
+        layer['sym_bounds'] = sym_bounds
 
 
 
@@ -98,7 +89,7 @@ def get_bounds(layers:      List[dict],
                u_0:         torch.tensor,
                prev_layers: List[dict]   = []) -> None:
     """
-    Get symbolic bounds of last layer
+    Add symbolic bounds for every layer
     """
 
     prev_layers = prev_layers.copy()
@@ -110,18 +101,42 @@ def get_bounds(layers:      List[dict],
 
 
 
-def backsubstitute(layers: List[dict]) -> Tuple[torch.tensor, 
-                                                torch.tensor, 
-                                                torch.tensor, 
-                                                torch.tensor]:
+def backsubstitute(layers:     List[dict],
+                   sym_bounds: tuple      = ()) -> Tuple[torch.tensor, 
+                                                         torch.tensor, 
+                                                         torch.tensor, 
+                                                         torch.tensor]:
     """
     Backsubstitute from last to first layer
     """
 
-    last_layer = layers[-1]
-    sym_bounds = last_layer['sym_bounds']
+    for i, layer in enumerate(reversed(layers)):
+        
+        # If Residual block
+        if layer['type'] == BasicBlock.__name__:
 
-    for layer in reversed(layers[:-1]):
-        sym_bounds = backsubstitute_step(*layer['sym_bounds'], *sym_bounds)
+            i_lim = len(layers) - i - 1
+            prev_layers = layers[:i_lim]
+            path_a = prev_layers + layer['path_a']
+            path_b = prev_layers + layer['path_b']
+
+            sym_bounds_a = backsubstitute(path_a, sym_bounds=sym_bounds)
+            sym_bounds_b = backsubstitute(path_b, sym_bounds=sym_bounds)
+
+            sym_bounds = tuple((
+                sym_bound_a + sym_bound_b
+                for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b)
+            ))
+
+            return sym_bounds
+
+            
+        # If another type of layer (encoded with sym_bounds)
+        elif sym_bounds:
+            sym_bounds = backsubstitute_step(*layer['sym_bounds'], *sym_bounds)
+
+        else:
+            sym_bounds = layer['sym_bounds']
+
 
     return sym_bounds
