@@ -72,7 +72,7 @@ def backsubsitute(layer:           dict,
         weight, bias = layer['weight_bias']
         sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
         
-        # Backsubsitute using previous layer's backsubstituted bounds
+        # Backsubsitute using previous layer's backsubstituted bounds (if any)
         if prev_sym_bounds:
             sym_bounds = backsubstitute_step(*prev_sym_bounds, *sym_bounds)
 
@@ -106,9 +106,8 @@ def get_bounds(layers:          List[dict],
     sym_bounds = prev_sym_bounds
     num_bounds = ( l_0, u_0 )
 
-    # Iterate over every layer
+    # Get symbolic bounds of every layer
     for layer in layers:
-        # Get symbolic bounds for each
         sym_bounds = backsubsitute(layer, sym_bounds, num_bounds)
 
     return sym_bounds
