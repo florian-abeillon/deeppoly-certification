@@ -2,7 +2,7 @@ import time
 import torch
 import torch.optim as optim
 
-from backsubstitution import get_bounds
+from backsubstitution import get_bounds, backsubstitute
 from preprocessing import (
     add_final_layer, get_layers_utils, 
     preprocess_bounds
@@ -37,7 +37,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
-        sym_bounds = get_bounds(layers, l_0, u_0)
+        get_bounds(layers, l_0, u_0)
+        sym_bounds = backsubstitute(layers)
         l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
