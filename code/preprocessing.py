@@ -9,8 +9,8 @@ from utils import compute_out_dim, get_conv_matrix
 
 
 
-def get_in_dim_flat(in_dim:   int,
-                    in_chans: int) -> int:
+def get_in_dim_flat(in_chans: int,
+                    in_dim:   int) -> int:
     """
     Get dimension of flattened tensor
     """
@@ -149,8 +149,10 @@ def get_layers_utils(net:      nn.Sequential,
         # If Linear layer
         if type_ == nn.Linear:
 
-            weight, bias, in_dim = get_utils_linear(layer)
-            in_dim_flat = get_in_dim_flat(in_chans, in_dim)
+            assert in_chans == 1
+
+            weight, bias, in_dim_flat = get_utils_linear(layer)
+            in_dim = None
 
             assert weight.shape[0] == in_dim_flat
 
@@ -192,21 +194,14 @@ def get_layers_utils(net:      nn.Sequential,
             utils['weight_bias'] = get_utils_batch_norm(layer, in_dim)
 
 
-        # If Identity layer
-        elif type_ == nn.Identity:
+        # # If Identity layer
+        # elif type_ == nn.Identity:
 
-            utils['weight_bias'] = get_utils_identity(in_dim_flat)
+        #     utils['weight_bias'] = get_utils_identity(in_dim_flat)
 
             
         # If Residual block
         elif type_ == BasicBlock:
-
-            # Add Identity layer before BasicBlock to have a layer with weight/bias
-            utils_identity = {
-                'type': nn.Identity.__name__,
-                'weight_bias': get_utils_identity(in_dim_flat)
-            }
-            layers.append(utils_identity)
 
             # Get utils from both path of ResidualBlock
             path_a, params_a, *_                            = get_layers_utils(layer.path_a, in_dim, in_chans)
@@ -216,13 +211,31 @@ def get_layers_utils(net:      nn.Sequential,
             params.extend(params_a)
             params.extend(params_b)
 
-            utils['prev_path'] = layers.copy()
-            utils['path_a'] = path_a
-            utils['path_b'] = path_b
+            utils['path_a'] = layers + path_a
+            utils['path_b'] = layers + path_b
+
+            # Reset layers (previous path already encapsulated in path_a and path_b)
+            layers = []
+
+            # Add Identity layer before BasicBlock to have a layer with weight/bias
+            utils_identity = {
+                'type': nn.Identity.__name__,
+                'weight_bias': get_utils_identity(in_dim_flat)
+            }
+            # layers.append(utils_identity)
+
             layers.append(utils)
 
             # To skip the layers that were already captured in the Residual block
             to_skip = len(path_a) + len(path_b) + 1
+
+
+        # If Flatten layer
+        elif type_ == nn.Flatten:
+
+            in_chans = 1
+            in_dim = None
+            continue
 
 
         else:
