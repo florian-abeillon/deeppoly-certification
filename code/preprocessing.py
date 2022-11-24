@@ -38,7 +38,8 @@ def get_utils_linear(layer: nn.Module) -> Tuple[torch.tensor,
     """
     weight = layer.weight.detach()
     bias = layer.bias.detach()
-    return weight, bias
+    out_dim = layer.out_features
+    return weight, bias, out_dim
 
 
 
@@ -148,8 +149,10 @@ def get_layers_utils(net:      nn.Sequential,
         # If Linear layer
         if type_ == nn.Linear:
 
-            weight, bias = get_utils_linear(layer)
-            in_dim_flat = weight.shape[0]
+            weight, bias, in_dim = get_utils_linear(layer)
+            in_dim_flat = get_in_dim_flat(in_chans, in_dim)
+
+            assert weight.shape[0] == in_dim_flat
 
             utils['weight_bias'] = ( weight, bias )
 
@@ -158,7 +161,9 @@ def get_layers_utils(net:      nn.Sequential,
         elif type_ == nn.Conv2d:
 
             weight, bias, in_dim, in_chans = get_utils_conv(layer, in_dim)
-            in_dim_flat = weight.shape[0]
+            in_dim_flat = get_in_dim_flat(in_chans, in_dim)
+
+            assert weight.shape[0] == in_dim_flat
 
             utils['weight_bias'] = ( weight, bias )
 
