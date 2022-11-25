@@ -2,7 +2,9 @@ import time
 import torch
 import torch.optim as optim
 
-from backsubstitution import get_sym_bounds, backsubstitute
+from backsubstitution import (
+    add_sym_bounds, backsubstitute
+)
 from preprocessing import (
     add_final_layer, linearize_layers, 
     preprocess_bounds
@@ -35,7 +37,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
-        layers_linearized = get_sym_bounds(layers, l_0, u_0)
+        layers_linearized = add_sym_bounds(layers, l_0, u_0)
         sym_bounds = backsubstitute(layers_linearized)
         l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
 

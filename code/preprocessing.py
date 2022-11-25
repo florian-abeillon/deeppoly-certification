@@ -5,7 +5,9 @@ import torch.nn as nn
 
 from networks import Normalization
 from resnet import BasicBlock
-from utils import compute_out_dim, get_conv_matrix
+from utils import (
+    compute_out_dim, get_conv_matrix
+)
 
 
 
@@ -132,7 +134,7 @@ def linearize_resblock_paths(layer:       nn.Module,
     # Get utils from both path of ResidualBlock
     path_a, params_a, *_                            = linearize_layers(layer.path_a, in_dim, in_chans)
     path_b, params_b, in_dim, in_chans, in_dim_flat = linearize_layers(layer.path_b, in_dim, in_chans)
-    
+
     params = params_a + params_b
 
     # Artificially add Identity layers to have paths with same length

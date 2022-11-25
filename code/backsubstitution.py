@@ -11,14 +11,14 @@ from utils import (
 
 
 
-def backsubstitute_step(prev_l_weight: torch.tensor,
-                        prev_u_weight: torch.tensor,
-                        prev_l_bias:   torch.tensor,
-                        prev_u_bias:   torch.tensor,
-                        l_weight:      torch.tensor, 
+def backsubstitute_step(l_weight:      torch.tensor, 
                         u_weight:      torch.tensor, 
                         l_bias:        torch.tensor, 
-                        u_bias:        torch.tensor) -> Tuple[torch.tensor, 
+                        u_bias:        torch.tensor,
+                        prev_l_weight: torch.tensor,
+                        prev_u_weight: torch.tensor,
+                        prev_l_bias:   torch.tensor,
+                        prev_u_bias:   torch.tensor) -> Tuple[torch.tensor, 
                                                               torch.tensor, 
                                                               torch.tensor, 
                                                               torch.tensor]:
@@ -56,17 +56,17 @@ def linearize_resblock(layer: nn.Module) -> List[dict]:
     # Iterate over every pair of layers
     for layer_a, layer_b in zip(layer['path_a'], layer['path_b']):
 
-        # Get their weights/bias
+        # Get their weight and bias
         l_weight_a, u_weight_a, l_bias_a, u_bias_a = layer_a['sym_bounds']
         l_weight_b, u_weight_b, l_bias_b, u_bias_b = layer_b['sym_bounds']
 
-        # Concatenate weights/bias
+        # Concatenate weights and biases
         l_weight = torch.block_diag(l_weight_a, l_weight_b)
         u_weight = torch.block_diag(u_weight_a, u_weight_b)
         l_bias = torch.cat([ l_bias_a, l_bias_b ])
         u_bias = torch.cat([ u_bias_a, u_bias_b ])
 
-        # Create Linear layer
+        # Create Linear layer out of them
         utils = {
             'type': nn.Linear.__name__,
             'sym_bounds': ( l_weight, u_weight, l_bias, u_bias )
@@ -96,7 +96,7 @@ def backsubstitute(layers:     List[dict],
         
         # Update symbolic bounds
         if sym_bounds:
-            sym_bounds = backsubstitute_step(*prev_sym_bounds, *sym_bounds)
+            sym_bounds = backsubstitute_step(*sym_bounds, *prev_sym_bounds)
         else:
             sym_bounds = prev_sym_bounds
 
@@ -104,7 +104,7 @@ def backsubstitute(layers:     List[dict],
 
 
 
-def get_sym_bounds(layers:      List[dict], 
+def add_sym_bounds(layers:      List[dict], 
                    l_0:         torch.tensor, 
                    u_0:         torch.tensor,
                    prev_layers: List[dict]   = []) -> List[dict]:
@@ -121,8 +121,8 @@ def get_sym_bounds(layers:      List[dict],
         if layer['type'] == BasicBlock.__name__:
 
             # Add symbolic bounds to every element of both paths
-            _ = get_sym_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
-            _ = get_sym_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
+            _ = add_sym_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
+            _ = add_sym_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
 
             layers_linearized = linearize_resblock(layer)
             prev_layers.extend(layers_linearized)
@@ -150,6 +150,5 @@ def get_sym_bounds(layers:      List[dict],
             layer['sym_bounds'] = sym_bounds
 
             prev_layers.append(layer)
-
 
     return prev_layers
