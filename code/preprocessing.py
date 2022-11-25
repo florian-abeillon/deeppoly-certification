@@ -211,13 +211,7 @@ def linearize_layers(net:      nn.Sequential,
         # If Linear layer
         if type_ == nn.Linear:
 
-            assert in_chans == 1
-
             weight, bias, in_dim_flat = linearize_linear(layer)
-            in_dim = None
-
-            # TODO: To remove
-            assert weight.shape[0] == in_dim_flat
 
             utils['weight_bias'] = ( weight, bias )
 
@@ -226,9 +220,6 @@ def linearize_layers(net:      nn.Sequential,
         elif type_ == nn.Conv2d:
 
             weight, bias, in_dim, in_chans, in_dim_flat = linearize_conv(layer, in_dim)
-
-            # TODO: To remove
-            assert weight.shape[0] == in_dim_flat
 
             utils['weight_bias'] = ( weight, bias )
 
@@ -265,7 +256,6 @@ def linearize_layers(net:      nn.Sequential,
         elif type_ == nn.Flatten:
 
             in_chans = 1
-            in_dim = None
             continue
 
 

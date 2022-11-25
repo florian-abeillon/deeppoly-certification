@@ -30,11 +30,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Optimization
     optimizer = optim.Adam(params, lr=1)
-
-    # TODO: To remove
-    i = 0
-    while i < 1000:
-    # while time.time() - TIME_START < TIME_LIMIT:
+    
+    while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
         layers_linearized = add_sym_bounds(layers, l_0, u_0)
@@ -44,19 +41,11 @@ def analyze(net, inputs, eps, true_label) -> bool:
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
         if err.gt(0).all():
-            print(i)
             return True
 
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.log(-err)
         loss.backward()
         optimizer.step()
-
-        # TODO: To remove
-        # if i % 10 == 0:
-        print(i)
-        print(loss.data)
-        print()
-        i+= 1
 
     return False

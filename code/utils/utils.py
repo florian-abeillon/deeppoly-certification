@@ -55,10 +55,6 @@ def get_numerical_bounds(l_0:      torch.tensor,
     """
     l = backsubstitute_bound(l_weight, l_0, u_0) + l_bias
     u = backsubstitute_bound(u_weight, u_0, l_0) + u_bias
-
-    # TODO: To remove
-    assert (u - l).ge(0).all()
-
     return l, u
 
 
@@ -84,9 +80,6 @@ def deep_poly(l:        torch.tensor,
 
     alpha = torch.sigmoid(param)
     mask_l = mask_1 + mask_2 * alpha
-    
-    # TODO: To remove
-    assert u.ge(l).all()
 
     lambda_ = u / (u - l)
     mask_u = mask_1 + mask_2 * lambda_
