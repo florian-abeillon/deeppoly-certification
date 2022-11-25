@@ -2,9 +2,9 @@ import time
 import torch
 import torch.optim as optim
 
-from backsubstitution import get_bounds, backsubstitute
+from backsubstitution import get_sym_bounds, backsubstitute
 from preprocessing import (
-    add_final_layer, get_layers_utils, 
+    add_final_layer, linearize_layers, 
     preprocess_bounds
 )
 from utils import (
@@ -18,7 +18,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Get an overview of layers in net
     in_chans, in_dim = inputs.shape[1], inputs.shape[2]
-    layers, params, _, _, out_dim_flat = get_layers_utils(net, in_dim, in_chans)
+    layers, params, _, _, out_dim_flat = linearize_layers(net, in_dim, in_chans)
     layers = add_final_layer(layers, out_dim_flat, true_label)
 
     # Initialize lower and upper bounds
@@ -29,16 +29,14 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # Optimization
     optimizer = optim.Adam(params, lr=1)
 
-    a = [ module for module in net.modules() ]
-
     # TODO: To remove
     i = 0
     while i < 1000:
     # while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
-        get_bounds(layers, l_0, u_0)
-        sym_bounds = backsubstitute(layers)
+        layers_linearized = get_sym_bounds(layers, l_0, u_0)
+        sym_bounds = backsubstitute(layers_linearized)
         l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label

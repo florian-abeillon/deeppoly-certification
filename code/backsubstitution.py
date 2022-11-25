@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import torch
+import torch.nn as nn
 
 from resnet import BasicBlock
 from utils import (
@@ -41,64 +42,41 @@ def backsubstitute_step(prev_l_weight: torch.tensor,
 
 
 
-def add_bounds(layer:       dict,
-               prev_layers: List[dict], 
-               l_0:         torch.tensor, 
-               u_0:         torch.tensor) -> None:
+
+def linearize_resblock(layer: nn.Module) -> List[dict]:
     """
-    Backsubsitute symbolic bounds using the ones from previous layer
+    Linearize a Residual block
     """
 
-    # If Residual block
-    if layer['type'] == BasicBlock.__name__:
+    layers = []
 
-        # Add symbolic bounds to each element of both paths
-        get_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
-        get_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
-    
+    # Add Linear layer that splits data in two
+    layers.append(layer['layer_in'])
 
-    # If another type of layer (encoded with a weight/bias)
-    else:
+    # Iterate over every pair of layers
+    for layer_a, layer_b in zip(layer['path_a'], layer['path_b']):
 
-        weight, bias = layer['weight_bias']
-        sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
+        # Get their weights/bias
+        l_weight_a, u_weight_a, l_bias_a, u_bias_a = layer_a['sym_bounds']
+        l_weight_b, u_weight_b, l_bias_b, u_bias_b = layer_b['sym_bounds']
 
-        # If layer is followed by a ReLU layer
-        if 'relu_param' in layer:
-        
-            if prev_layers:
-                prev_sym_bounds_backsub = backsubstitute(prev_layers)
-                sym_bounds_backsub = backsubstitute_step(*prev_sym_bounds_backsub, *sym_bounds)
-            else:
-                sym_bounds_backsub = sym_bounds
+        # Concatenate weights/bias
+        l_weight = torch.block_diag(l_weight_a, l_weight_b)
+        u_weight = torch.block_diag(u_weight_a, u_weight_b)
+        l_bias = torch.cat([ l_bias_a, l_bias_b ])
+        u_bias = torch.cat([ u_bias_a, u_bias_b ])
 
-            # Get numerical bounds so far
-            num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
-            param = layer['relu_param']
+        # Create Linear layer
+        utils = {
+            'type': nn.Linear.__name__,
+            'sym_bounds': ( l_weight, u_weight, l_bias, u_bias )
+        }
+        layers.append(utils)
 
-            # Get symbolic bounds using DeepPoly ReLU approximation
-            sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
+    # Add Linear layer that puts data back together
+    layers.append(layer['layer_out'])
 
-
-        # Add symbolic bound to layer element (to be used later on)
-        layer['sym_bounds'] = sym_bounds
-
-
-
-def get_bounds(layers:      List[dict], 
-               l_0:         torch.tensor, 
-               u_0:         torch.tensor,
-               prev_layers: List[dict]   = []) -> None:
-    """
-    Add symbolic bounds for every layer
-    """
-
-    prev_layers = prev_layers.copy()
-
-    # Get symbolic bounds of every layer
-    for layer in layers:
-        add_bounds(layer, prev_layers, l_0, u_0)
-        prev_layers.append(layer)
+    return layers
 
 
 
@@ -111,38 +89,67 @@ def backsubstitute(layers:     List[dict],
     Backsubstitute from last to first layer
     """
 
-    for i, layer in enumerate(reversed(layers)):
+    # Iterate over every layer backwards
+    for layer in reversed(layers):
+
+        prev_sym_bounds = layer['sym_bounds']
+        
+        # Update symbolic bounds
+        if sym_bounds:
+            sym_bounds = backsubstitute_step(*prev_sym_bounds, *sym_bounds)
+        else:
+            sym_bounds = prev_sym_bounds
+
+    return sym_bounds
+
+
+
+def get_sym_bounds(layers:      List[dict], 
+                   l_0:         torch.tensor, 
+                   u_0:         torch.tensor,
+                   prev_layers: List[dict]   = []) -> List[dict]:
+    """
+    Add symbolic bounds to every layer
+    """
+
+    prev_layers = prev_layers.copy()
+
+    # Iterate over every layer
+    for layer in layers:
         
         # If Residual block
         if layer['type'] == BasicBlock.__name__:
 
-            # Create two independent paths that go from current layer to input layer
-            i_lim = len(layers) - i - 1
-            prev_layers = layers[:i_lim]
-            path_a = prev_layers + layer['path_a']
-            path_b = prev_layers + layer['path_b']
+            # Add symbolic bounds to every element of both paths
+            _ = get_sym_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
+            _ = get_sym_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
 
-            # Backsubstitute each path independently
-            sym_bounds_a = backsubstitute(path_a, sym_bounds=sym_bounds)
-            sym_bounds_b = backsubstitute(path_b, sym_bounds=sym_bounds)
+            layers_linearized = linearize_resblock(layer)
+            prev_layers.extend(layers_linearized)
+        
 
-            # Add symbolic bounds
-            sym_bounds = tuple((
-                sym_bound_a + sym_bound_b
-                for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b)
-            ))
-
-            # Return already (as the two paths went all the way to the input layer)
-            return sym_bounds
-
-            
-        # If another type of layer (encoded with sym_bounds)
-        # Get symbolic bounds directly
-        elif sym_bounds:
-            sym_bounds = backsubstitute_step(*layer['sym_bounds'], *sym_bounds)
-
+        # If another type of layer
         else:
-            sym_bounds = layer['sym_bounds']
+
+            # Initialize symbolic bounds with weight/bias
+            weight, bias = layer['weight_bias']
+            sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
+
+            # If layer is followed by a ReLU layer
+            if 'relu_param' in layer:
+            
+                # Get numerical bounds so far
+                sym_bounds_backsub = backsubstitute(prev_layers, sym_bounds=sym_bounds)
+                num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
+
+                # Get symbolic bounds using DeepPoly ReLU approximation
+                param = layer['relu_param']
+                sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
+
+            # Update symbolic bounds
+            layer['sym_bounds'] = sym_bounds
+
+            prev_layers.append(layer)
 
 
-    return sym_bounds
+    return prev_layers
