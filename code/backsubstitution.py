@@ -11,37 +11,6 @@ from utils import (
 
 
 
-def backsubstitute_step(l_weight:      torch.tensor, 
-                        u_weight:      torch.tensor, 
-                        l_bias:        torch.tensor, 
-                        u_bias:        torch.tensor,
-                        prev_l_weight: torch.tensor,
-                        prev_u_weight: torch.tensor,
-                        prev_l_bias:   torch.tensor,
-                        prev_u_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                                              torch.tensor, 
-                                                              torch.tensor, 
-                                                              torch.tensor]:
-    """
-    Backpropagate symbolic bounds using ReLU ones
-    """
-
-    # Update lower bounds
-    l_weight, l_bias = (
-        backsubstitute_bound(l_weight, prev_l_weight, prev_u_weight),
-        backsubstitute_bound(l_weight, prev_l_bias, prev_u_bias) + l_bias
-    )
-
-    # Update upper bounds
-    u_weight, u_bias = (
-        backsubstitute_bound(u_weight, prev_u_weight, prev_l_weight),
-        backsubstitute_bound(u_weight, prev_u_bias, prev_l_bias) + u_bias
-    )
-    
-    return l_weight, u_weight, l_bias, u_bias
-
-
-
 
 def linearize_resblock(layer: nn.Module) -> List[dict]:
     """
@@ -73,10 +42,38 @@ def linearize_resblock(layer: nn.Module) -> List[dict]:
         }
         layers.append(utils)
 
-    # Add Linear layer that puts data back together
-    layers.append(layer['layer_out'])
-
     return layers
+
+
+
+def backsubstitute_step(l_weight:      torch.tensor, 
+                        u_weight:      torch.tensor, 
+                        l_bias:        torch.tensor, 
+                        u_bias:        torch.tensor,
+                        prev_l_weight: torch.tensor,
+                        prev_u_weight: torch.tensor,
+                        prev_l_bias:   torch.tensor,
+                        prev_u_bias:   torch.tensor) -> Tuple[torch.tensor, 
+                                                              torch.tensor, 
+                                                              torch.tensor, 
+                                                              torch.tensor]:
+    """
+    Backpropagate symbolic bounds using ReLU ones
+    """
+
+    # Update lower bounds
+    l_weight, l_bias = (
+        backsubstitute_bound(l_weight, prev_l_weight, prev_u_weight),
+        backsubstitute_bound(l_weight, prev_l_bias, prev_u_bias) + l_bias
+    )
+
+    # Update upper bounds
+    u_weight, u_bias = (
+        backsubstitute_bound(u_weight, prev_u_weight, prev_l_weight),
+        backsubstitute_bound(u_weight, prev_u_bias, prev_l_bias) + u_bias
+    )
+    
+    return l_weight, u_weight, l_bias, u_bias
 
 
 
@@ -126,29 +123,29 @@ def add_sym_bounds(layers:      List[dict],
 
             layers_linearized = linearize_resblock(layer)
             prev_layers.extend(layers_linearized)
+
+            # Continue with layer_out of Residual block
+            layer = layer['layer_out']
         
 
-        # If another type of layer
-        else:
+        # Initialize symbolic bounds with weight/bias
+        weight, bias = layer['weight_bias']
+        sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
 
-            # Initialize symbolic bounds with weight/bias
-            weight, bias = layer['weight_bias']
-            sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
+        # If layer is followed by a ReLU layer
+        if 'relu_param' in layer:
+        
+            # Get numerical bounds so far
+            sym_bounds_backsub = backsubstitute(prev_layers, sym_bounds=sym_bounds)
+            num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
 
-            # If layer is followed by a ReLU layer
-            if 'relu_param' in layer:
-            
-                # Get numerical bounds so far
-                sym_bounds_backsub = backsubstitute(prev_layers, sym_bounds=sym_bounds)
-                num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
+            # Get symbolic bounds using DeepPoly ReLU approximation
+            param = layer['relu_param']
+            sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
 
-                # Get symbolic bounds using DeepPoly ReLU approximation
-                param = layer['relu_param']
-                sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
+        # Update symbolic bounds
+        layer['sym_bounds'] = sym_bounds
 
-            # Update symbolic bounds
-            layer['sym_bounds'] = sym_bounds
-
-            prev_layers.append(layer)
+        prev_layers.append(layer)
 
     return prev_layers

@@ -10,34 +10,14 @@ TIME_LIMIT = 60
 
 
 
-def get_symbolic_bounds(layer: dict) -> Tuple[torch.tensor, 
-                                              torch.tensor, 
-                                              torch.tensor, 
-                                              torch.tensor]:
-    """
-    Get symbolic bounds of layer
-    """
-    weight, bias = layer['weight_bias']
-    return weight, weight.clone(), bias, bias.clone()
-
-
-
-def get_pos_neg(t: torch.tensor) -> Tuple[torch.tensor, 
-                                          torch.tensor]:
-    """
-    Get matrices of positive and negative coefs
-    """ 
-    return F.relu(t), -F.relu(-t)
-
-
-
 def backsubstitute_bound(weight:          torch.tensor, 
                          prev_weight:     torch.tensor, 
                          prev_weight_inv: torch.tensor) -> torch.tensor:
     """
     Backsubstitute bound using previous weights
     """
-    weight_pos, weight_neg = get_pos_neg(weight)
+    weight_pos =  F.relu(weight)
+    weight_neg = -F.relu(-weight)
     return torch.matmul(weight_pos, prev_weight) + \
            torch.matmul(weight_neg, prev_weight_inv)
 
@@ -81,7 +61,7 @@ def deep_poly(l:        torch.tensor,
     alpha = torch.sigmoid(param)
     mask_l = mask_1 + mask_2 * alpha
 
-    lambda_ = u / (u - l)
+    lambda_ = torch.where(mask_2, u / (u - l), torch.zeros_like(u))
     mask_u = mask_1 + mask_2 * lambda_
 
     # ReLU resolution for weights

@@ -78,7 +78,7 @@ def linearize_norm(layer:    nn.Module,
 
         # Build weight and bias
         weight = 1 / sigma
-        bias = -mean * weight
+        bias = - mean * weight
 
     # If Batch normalization layer
     else:
@@ -86,10 +86,11 @@ def linearize_norm(layer:    nn.Module,
         mean = layer.running_mean.detach()
         var = layer.running_var.detach()
         eps = layer.eps
-        gamma = layer.weight.detach()
 
         # Build weight and bias
-        weight = gamma / torch.sqrt(var + eps)
+        weight = layer.weight.detach()
+        weight /= torch.sqrt(var + eps)
+
         bias = layer.bias.detach()
         bias -= mean * weight
 
@@ -147,9 +148,9 @@ def linearize_resblock_paths(layer:       nn.Module,
 
     diff = len(path_a) - len(path_b)
     if diff > 0:
-        path_b += [utils_identity] * diff
+        path_b += [ utils_identity.copy() for _ in range(diff)  ]
     elif diff < 0:
-        path_a += [utils_identity] * -diff
+        path_a += [ utils_identity.copy() for _ in range(-diff) ]
 
     utils['path_a'] = path_a
     utils['path_b'] = path_b
@@ -161,7 +162,7 @@ def linearize_resblock_paths(layer:       nn.Module,
     bias_out = torch.zeros(in_dim_flat)
     utils_out = {
         'type': nn.Linear.__name__,
-        'sym_bounds': ( weight_out, weight_out.clone(), bias_out, bias_out.clone() )
+        'weight_bias': ( weight_out, bias_out )
     }
     utils['layer_out'] = utils_out
 
@@ -232,7 +233,10 @@ def linearize_layers(net:      nn.Sequential,
             params.append(param)
 
             # Add parameter to previous layer
-            layers[-1]['relu_param'] = param
+            last_layer = layers[-1]
+            if last_layer['type'] == BasicBlock.__name__:
+                last_layer = last_layer['layer_out']
+            last_layer['relu_param'] = param
             continue
 
 
@@ -294,6 +298,14 @@ def add_final_layer(layers:     List[dict],
     
     return layers
 
+    assert 'weight_bias' in layers[-1] and 'relu_param' not in layers[-1]
+
+    weight, bias = layers[-1]['weight_bias']
+
+    weight = torch.matmul(final_weight, weight)
+    bias = torch.matmul(final_weight, bias) + final_bias
+
+    layers[-1]['weight_bias'] = weight, bias
 
 
 def preprocess_bounds(layers: List[dict], 

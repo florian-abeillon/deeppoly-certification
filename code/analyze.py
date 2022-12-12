@@ -40,7 +40,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
-        if err.gt(0).all():
+        if err > 0:
             return True
 
         # Compute loss, and backpropagate to learn alpha parameters
