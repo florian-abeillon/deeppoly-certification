@@ -122,6 +122,7 @@ def linearize_resblock_paths(layer:       nn.Module,
             
     # Create Linear layer that splits data in two
     weight_in = torch.eye(in_dim_flat)
+    # Creates matrix with double the 2n rows, n for path a, n for path b
     weight_in = torch.cat([ weight_in, weight_in ])
     bias_in = torch.zeros(in_dim_flat * 2)
     utils_in = {
@@ -145,6 +146,7 @@ def linearize_resblock_paths(layer:       nn.Module,
         'weight_bias': ( weight_identity, bias_identity )
     }
 
+    # Extend path with Identity layers
     diff = len(path_a) - len(path_b)
     if diff > 0:
         path_b += [utils_identity] * diff
@@ -161,7 +163,7 @@ def linearize_resblock_paths(layer:       nn.Module,
     bias_out = torch.zeros(in_dim_flat)
     utils_out = {
         'type': nn.Linear.__name__,
-        'sym_bounds': ( weight_out, weight_out.clone(), bias_out, bias_out.clone() )
+        'weight_bias': ( weight_out, bias_out )
     }
     utils['layer_out'] = utils_out
 
@@ -188,6 +190,7 @@ def linearize_layers(net:      nn.Sequential,
         net_layers = [net.normalization] 
         for layer in net.resnet:
             if type(layer) == nn.Sequential:
+                # nn.Sequential is an iterable so we need to convert it to a list
                 net_layers.extend(list(layer))
             else:
                 net_layers.append(layer)
@@ -263,7 +266,7 @@ def linearize_layers(net:      nn.Sequential,
             continue
 
 
-        layers.append(utils)
+        layers  .append(utils)
 
 
     return layers, params, in_dim, in_chans, in_dim_flat

@@ -125,6 +125,15 @@ def add_sym_bounds(layers:      List[dict],
             _ = add_sym_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
 
             layers_linearized = linearize_resblock(layer)
+            weight, bias = layers_linearized[-1]['weight_bias']
+            sym_bounds = ( weight, weight.clone(), bias, bias.clone() )
+            if 'relu_param' in layer:
+                sym_bounds_backsub = backsubstitute((prev_layers.copy() + layers_linearized[:-1]), sym_bounds=sym_bounds)
+                num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
+                param = layer['relu_param']
+                sym_bounds = deep_poly(*num_bounds, param, *sym_bounds)
+                layers_linearized[-1]['sym_bounds'] = sym_bounds
+
             prev_layers.extend(layers_linearized)
         
 
