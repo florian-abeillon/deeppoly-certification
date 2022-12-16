@@ -16,11 +16,14 @@ def backsubstitute_bound(weight:          torch.tensor,
     """
     Backsubstitute bound using previous weights
     """
-    weight_pos =  F.relu(weight)
-    weight_neg = -F.relu(-weight)
-    return torch.matmul(weight_pos, prev_weight) + \
-           torch.matmul(weight_neg, prev_weight_inv)
+    mask = weight > 0
+    return torch.matmul(weight *  mask, prev_weight) + \
+           torch.matmul(weight * ~mask, prev_weight_inv)
 
+
+
+# Compute numerical bound from symbolic one
+get_numerical_bound = lambda l, u, weight, bias: backsubstitute_bound(weight, l, u) + bias
 
 
 def get_numerical_bounds(l_0:      torch.tensor, 
@@ -33,8 +36,8 @@ def get_numerical_bounds(l_0:      torch.tensor,
     """
     Compute numerical bounds from symbolic ones
     """
-    l = backsubstitute_bound(l_weight, l_0, u_0) + l_bias
-    u = backsubstitute_bound(u_weight, u_0, l_0) + u_bias
+    l = get_numerical_bound(l_0, u_0, l_weight, l_bias)
+    u = get_numerical_bound(u_0, l_0, u_weight, u_bias)
     return l, u
 
 
@@ -61,8 +64,12 @@ def deep_poly(l:        torch.tensor,
     alpha = torch.sigmoid(param)
     mask_l = mask_1 + mask_2 * alpha
 
-    lambda_ = torch.where(mask_2, u / (u - l), torch.zeros_like(u))
+    lambda_ = torch.where(mask_2, u / (u - l + 1e-12), torch.zeros_like(u))
     mask_u = mask_1 + mask_2 * lambda_
+
+#     assert lambda_[mask_2].ne(0).all()
+#     assert ~lambda_.grad[mask_2].isnan().any()
+#     assert ~(1 / lambda_[mask_2]**2).isnan().any()
 
     # ReLU resolution for weights
     l_weight = l_weight * mask_l.unsqueeze(1)

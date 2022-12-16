@@ -6,17 +6,41 @@ import torch.nn as nn
 from networks import Normalization
 from resnet import BasicBlock
 from utils import (
-    compute_out_dim, get_conv_matrix
+    compute_out_dim, get_conv_matrix,
+    get_numerical_bounds
 )
 
 
 
-def get_in_dim_flat(in_chans: int,
-                    in_dim:   int) -> int:
+# Get dimension of flattened tensor
+get_in_dim_flat = lambda in_chans, in_dim: in_chans * in_dim**2
+
+
+
+def get_net_layers(net: nn.Module) -> List[nn.Module]:
     """
-    Get dimension of flattened tensor
+    Get list of layers in net
     """
-    return in_chans * in_dim**2
+    
+    # If ResNet
+    if hasattr(net, 'resnet'):
+        net_layers = [net.normalization] 
+
+        for layer in net.resnet:
+            if type(layer) == nn.Sequential:
+                net_layers.extend(list(layer))
+            else:
+                net_layers.append(layer)
+
+    # If FullyConnected or Conv
+    elif hasattr(net, 'layers'):
+        net_layers = net.layers
+
+    # If Sequential (from Residual block)
+    else:
+        net_layers = net
+
+    return net_layers
 
 
 
@@ -143,7 +167,7 @@ def linearize_resblock_paths(layer:       nn.Module,
     bias_identity = torch.zeros(in_dim_flat)
     utils_identity = {
         'type': nn.Identity.__name__,
-        'weight_bias': ( weight_identity, bias_identity )
+        'sym_bounds': ( weight_identity, weight_identity.clone(), bias_identity, bias_identity.clone() )
     }
 
     diff = len(path_a) - len(path_b)
@@ -179,26 +203,10 @@ def linearize_layers(net:      nn.Sequential,
     Get utils from every layer of net
     """
 
+    net_layers = get_net_layers(net)
     in_dim_flat = get_in_dim_flat(in_chans, in_dim)
 
     layers, params = [], []
-
-    ## Get list of layers in net
-    # If ResNet
-    if hasattr(net, 'resnet'):
-        net_layers = [net.normalization] 
-        for layer in net.resnet:
-            if type(layer) == nn.Sequential:
-                net_layers.extend(list(layer))
-            else:
-                net_layers.append(layer)
-    # If FullyConnected or Conv
-    elif hasattr(net, 'layers'):
-        net_layers = net.layers
-    # If Sequential (from Residual block)
-    else:
-        net_layers = net
-
 
     # Iterate over every layer
     for layer in net_layers:
@@ -274,7 +282,6 @@ def linearize_layers(net:      nn.Sequential,
 
 
 
-
 def add_final_layer(layers:     List[dict], 
                     out_dim:    int,
                     true_label: int       ) -> List[dict]:
@@ -290,22 +297,15 @@ def add_final_layer(layers:     List[dict],
     # No bias
     final_bias = torch.zeros(out_dim - 1)
 
-    final_layer = {
-        'type': nn.Linear.__name__,
-        'weight_bias': ( final_weight, final_bias )
-    }
-    layers.append(final_layer)
-    
-    return layers
-
     assert 'weight_bias' in layers[-1] and 'relu_param' not in layers[-1]
 
     weight, bias = layers[-1]['weight_bias']
 
     weight = torch.matmul(final_weight, weight)
-    bias = torch.matmul(final_weight, bias) + final_bias
+    bias   = torch.matmul(final_weight, bias)   + final_bias
 
-    layers[-1]['weight_bias'] = weight, bias
+    layers[-1]['weight_bias'] = ( weight, bias )
+
 
 
 def preprocess_bounds(layers: List[dict], 
@@ -321,16 +321,12 @@ def preprocess_bounds(layers: List[dict],
     l_0 = l_0.flatten()
     u_0 = u_0.flatten()
 
-    # If first layer is a Normalization layer
-    first_layer = layers[0]
+    for i, layer in enumerate(layers):
 
-    if first_layer['type'] == Normalization.__name__:
+        if 'relu_param' in layer:
+            break
 
-        weight, bias = first_layer ['weight_bias']
-        l_0 = torch.matmul(weight, l_0) + bias
-        u_0 = torch.matmul(weight, u_0) + bias
+        weight, bias = layer['weight_bias']
+        l_0, u_0 = get_numerical_bounds(l_0, u_0, weight, weight, bias, bias)
 
-        # Remove normalization layer
-        layers = layers[1:]
-
-    return layers, l_0, u_0
+    return layers[i:], l_0, u_0

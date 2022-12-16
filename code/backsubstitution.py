@@ -64,13 +64,13 @@ def backsubstitute_step(l_weight:      torch.tensor,
     # Update lower bounds
     l_weight, l_bias = (
         backsubstitute_bound(l_weight, prev_l_weight, prev_u_weight),
-        backsubstitute_bound(l_weight, prev_l_bias, prev_u_bias) + l_bias
+        backsubstitute_bound(l_weight, prev_l_bias,   prev_u_bias)   + l_bias
     )
 
     # Update upper bounds
     u_weight, u_bias = (
         backsubstitute_bound(u_weight, prev_u_weight, prev_l_weight),
-        backsubstitute_bound(u_weight, prev_u_bias, prev_l_bias) + u_bias
+        backsubstitute_bound(u_weight, prev_u_bias,   prev_l_bias)   + u_bias
     )
     
     return l_weight, u_weight, l_bias, u_bias
@@ -101,25 +101,30 @@ def backsubstitute(layers:     List[dict],
 
 
 
-def add_sym_bounds(layers:      List[dict], 
-                   l_0:         torch.tensor, 
-                   u_0:         torch.tensor,
-                   prev_layers: List[dict]   = []) -> List[dict]:
+def get_symbolic_bounds(layers:      List[dict], 
+                        l_0:         torch.tensor, 
+                        u_0:         torch.tensor,
+                        prev_layers: List[dict]   = []) -> List[dict]:
     """
     Add symbolic bounds to every layer
     """
 
-    prev_layers = prev_layers.copy()
+    if prev_layers:
+        prev_layers = prev_layers.copy()
 
     # Iterate over every layer
     for layer in layers:
         
+        # If Identity layer
+        if layer['type'] == nn.Identity.__name__:
+            continue
+        
         # If Residual block
-        if layer['type'] == BasicBlock.__name__:
+        elif layer['type'] == BasicBlock.__name__:
 
             # Add symbolic bounds to every element of both paths
-            _ = add_sym_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
-            _ = add_sym_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
+            _ = get_symbolic_bounds(layer['path_a'], l_0, u_0, prev_layers=prev_layers)
+            _ = get_symbolic_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
 
             layers_linearized = linearize_resblock(layer)
             prev_layers.extend(layers_linearized)

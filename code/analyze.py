@@ -3,7 +3,7 @@ import torch
 import torch.optim as optim
 
 from backsubstitution import (
-    add_sym_bounds, backsubstitute
+    get_symbolic_bounds, backsubstitute
 )
 from preprocessing import (
     add_final_layer, linearize_layers, 
@@ -11,8 +11,10 @@ from preprocessing import (
 )
 from utils import (
     TIME_LIMIT, TIME_START,
-    get_numerical_bounds
+    get_numerical_bound
 )
+
+torch.autograd.set_detect_anomaly(True)
 
 
 
@@ -21,7 +23,7 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # Get an overview of layers in net
     in_chans, in_dim = inputs.shape[1], inputs.shape[2]
     layers, params, _, _, out_dim_flat = linearize_layers(net, in_dim, in_chans)
-    layers = add_final_layer(layers, out_dim_flat, true_label)
+    add_final_layer(layers, out_dim_flat, true_label)
 
     # Initialize lower and upper bounds
     l_0 = (inputs - eps).clamp(0, 1)
@@ -30,18 +32,28 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Optimization
     optimizer = optim.Adam(params, lr=1)
+
+    print('Setup')
+    print(time.time() - TIME_START)
+    print()
     
-    while time.time() - TIME_START < TIME_LIMIT:
+    # while time.time() - TIME_START < TIME_LIMIT:
+    while True:
         optimizer.zero_grad()
 
-        layers_linearized = add_sym_bounds(layers, l_0, u_0)
+        layers_linearized = get_symbolic_bounds(layers, l_0, u_0, prev_layers=[])
+        # layers_linearized = add_sym_bounds(layers, l_0, u_0, prev_layers)
         sym_bounds = backsubstitute(layers_linearized)
-        l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
+        l_weight, l_bias = sym_bounds[0], sym_bounds[2]
+        l = get_numerical_bound(l_0, u_0, l_weight, l_bias)
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
+        print(time.time() - TIME_START)
         if err > 0:
             return True
+        print(err)
+        print()
 
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.log(-err)
