@@ -7,7 +7,7 @@ from networks import Normalization
 from resnet import BasicBlock
 from utils import (
     compute_out_dim, get_conv_matrix,
-    get_numerical_bounds
+    get_numerical_bounds, init_symbolic_bounds
 )
 
 
@@ -86,23 +86,22 @@ def linearize_conv(layer:  nn.Module,
 
 
 
-def linearize_norm(layer:    nn.Module, 
-                   in_dim:   int      ,
-                   is_batch: bool      = False) -> Tuple[torch.tensor,
-                                                         torch.tensor]:
+def linearize_norm(layer:  nn.Module, 
+                   in_dim: int      ) -> Tuple[torch.tensor,
+                                               torch.tensor]:
     """
     Get utils for (Batch) Normalization layer
     """
 
     # If Normalization layer
-    if not is_batch:
+    if type(layer) == Normalization:
 
         mean = layer.mean.detach()
         sigma = layer.sigma.detach()
 
         # Build weight and bias
         weight = 1 / sigma
-        bias = - mean * weight
+        bias = -mean * weight
 
     # If Batch normalization layer
     else:
@@ -122,7 +121,7 @@ def linearize_norm(layer:    nn.Module,
     # Reshape weight and bias
     n = in_dim**2
     weight = weight.repeat_interleave(n)
-    bias = bias.repeat_interleave(n)
+    bias   = bias.repeat_interleave(n)
 
     # Turn weight vector into diagonal matrix (for matrix multiplication)
     weight = torch.diag(weight)
@@ -143,54 +142,35 @@ def linearize_resblock_paths(layer:       nn.Module,
     Get utils for Residual block
     """
 
-    utils = {}
-            
-    # Create Linear layer that splits data in two
-    weight_in = torch.eye(in_dim_flat)
-    weight_in = torch.cat([ weight_in, weight_in ])
-    bias_in = torch.zeros(in_dim_flat * 2)
-    utils_in = {
-        'type': nn.Linear.__name__,
-        'sym_bounds': ( weight_in, weight_in.clone(), bias_in, bias_in.clone() )
-    }
-    utils['layer_in'] = utils_in
-
-
     # Get utils from both path of ResidualBlock
     path_a, params_a, *_                            = linearize_layers(layer.path_a, in_dim, in_chans)
     path_b, params_b, in_dim, in_chans, in_dim_flat = linearize_layers(layer.path_b, in_dim, in_chans)
 
+    # Create symbolic bounds that ultimately sum the two paths
+    weight = torch.eye(in_dim_flat)
+    bias = torch.zeros(in_dim_flat)
+
+    if not path_a:
+        path_a.append({
+            'type': nn.Linear.__name__,
+            'weight_bias': ( weight.clone(), bias.clone() ),
+            'sym_bounds': init_symbolic_bounds(weight.clone(), bias.clone())
+        })
+
+    elif not path_b:
+        path_b.append({
+            'type': nn.Linear.__name__,
+            'weight_bias': ( weight.clone(), bias.clone() ),
+            'sym_bounds': init_symbolic_bounds(weight.clone(), bias.clone())
+        })
+
+    utils = {
+        'path_a': path_a,
+        'path_b': path_b
+    }
     params = params_a + params_b
 
-    # Artificially add Identity layers to have paths with same length
-    weight_identity = torch.eye(in_dim_flat)
-    bias_identity = torch.zeros(in_dim_flat)
-    utils_identity = {
-        'type': nn.Identity.__name__,
-        'sym_bounds': ( weight_identity, weight_identity.clone(), bias_identity, bias_identity.clone() )
-    }
-
-    diff = len(path_a) - len(path_b)
-    if diff > 0:
-        path_b += [ utils_identity.copy() for _ in range(diff)  ]
-    elif diff < 0:
-        path_a += [ utils_identity.copy() for _ in range(-diff) ]
-
-    utils['path_a'] = path_a
-    utils['path_b'] = path_b
-
-
-    # Create Linear layer that puts data back together
-    weight_out = torch.eye(in_dim_flat)
-    weight_out = torch.cat([ weight_out, weight_out ], dim=1)
-    bias_out = torch.zeros(in_dim_flat)
-    utils_out = {
-        'type': nn.Linear.__name__,
-        'weight_bias': ( weight_out, bias_out )
-    }
-    utils['layer_out'] = utils_out
-
-    return utils, params, in_dim, in_chans, in_dim_flat
+    return weight, bias, utils, params, in_dim, in_chans, in_dim_flat
 
 
 
@@ -222,15 +202,11 @@ def linearize_layers(net:      nn.Sequential,
 
             weight, bias, in_dim_flat = linearize_linear(layer)
 
-            utils['weight_bias'] = ( weight, bias )
-
         
         # If Convolutional layer
         elif type_ == nn.Conv2d:
 
             weight, bias, in_dim, in_chans, in_dim_flat = linearize_conv(layer, in_dim)
-
-            utils['weight_bias'] = ( weight, bias )
 
 
         # If ReLU layer
@@ -240,25 +216,23 @@ def linearize_layers(net:      nn.Sequential,
             param = torch.zeros(in_dim_flat, requires_grad=True)
             params.append(param)
 
-            # Add parameter to previous layer
-            last_layer = layers[-1]
-            if last_layer['type'] == BasicBlock.__name__:
-                last_layer = last_layer['layer_out']
-            last_layer['relu_param'] = param
+            # Add parameter
+            utils['param'] = param
+            layers.append(utils)
+
             continue
 
 
         # If (Batch) Normalization layer
         elif type_ in [ Normalization, nn.BatchNorm2d ]:
 
-            is_batch = type_ == nn.BatchNorm2d
-            utils['weight_bias'] = linearize_norm(layer, in_dim, is_batch=is_batch)
+            weight, bias = linearize_norm(layer, in_dim)
 
-            
+
         # If Residual block
         elif type_ == BasicBlock:
 
-            utils_resblock, params_resblock, in_dim, in_chans, in_dim_flat = linearize_resblock_paths(layer, in_dim, in_chans, in_dim_flat)
+            weight, bias, utils_resblock, params_resblock, in_dim, in_chans, in_dim_flat = linearize_resblock_paths(layer, in_dim, in_chans, in_dim_flat)
 
             utils.update(utils_resblock)
             params.extend(params_resblock)
@@ -275,6 +249,9 @@ def linearize_layers(net:      nn.Sequential,
             continue
 
 
+        utils['weight_bias'] = ( weight, bias )
+        utils['sym_bounds'] = init_symbolic_bounds(*utils['weight_bias'])
+
         layers.append(utils)
 
 
@@ -284,7 +261,7 @@ def linearize_layers(net:      nn.Sequential,
 
 def add_final_layer(layers:     List[dict], 
                     out_dim:    int,
-                    true_label: int       ) -> List[dict]:
+                    true_label: int       ) -> None:
     """
     Artificially add a final layer, to subtract the true_label output node to every other output node
     """
@@ -297,14 +274,15 @@ def add_final_layer(layers:     List[dict],
     # No bias
     final_bias = torch.zeros(out_dim - 1)
 
-    assert 'weight_bias' in layers[-1] and 'relu_param' not in layers[-1]
+    last_layer = layers[-1]
 
-    weight, bias = layers[-1]['weight_bias']
+    assert last_layer['type'] != nn.ReLU.__name__
 
+    weight, bias = last_layer['weight_bias']
     weight = torch.matmul(final_weight, weight)
-    bias   = torch.matmul(final_weight, bias)   + final_bias
+    bias = torch.matmul(final_weight, bias) + final_bias
 
-    layers[-1]['weight_bias'] = ( weight, bias )
+    last_layer['sym_bounds'] = init_symbolic_bounds(weight, bias)
 
 
 
@@ -321,12 +299,16 @@ def preprocess_bounds(layers: List[dict],
     l_0 = l_0.flatten()
     u_0 = u_0.flatten()
 
-    for i, layer in enumerate(layers):
+    # If first layer is a Normalization layer
+    first_layer = layers[0]
 
-        if 'relu_param' in layer:
-            break
+    if first_layer['type'] == Normalization.__name__:
 
-        weight, bias = layer['weight_bias']
-        l_0, u_0 = get_numerical_bounds(l_0, u_0, weight, weight, bias, bias)
+        weight, bias = first_layer ['weight_bias']
+        l_0 = torch.matmul(weight, l_0) + bias
+        u_0 = torch.matmul(weight, u_0) + bias
 
-    return layers[i:], l_0, u_0
+        # Remove normalization layer
+        layers = layers[1:]
+
+    return layers, l_0, u_0

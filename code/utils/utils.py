@@ -2,11 +2,15 @@ from typing import Tuple
 
 import time
 import torch
-import torch.nn.functional as F
 
 
 TIME_START = time.time()
 TIME_LIMIT = 60
+
+
+
+# Initialize symbolic bounds from weight/bias
+init_symbolic_bounds = lambda weight, bias: ( weight, weight.clone(), bias, bias.clone() )
 
 
 
@@ -42,22 +46,18 @@ def get_numerical_bounds(l_0:      torch.tensor,
 
 
 
-def deep_poly(l:        torch.tensor, 
-              u:        torch.tensor,
-              param:    torch.tensor,
-              l_weight: torch.tensor,
-              u_weight: torch.tensor,
-              l_bias:   torch.tensor,
-              u_bias:   torch.tensor) -> Tuple[torch.tensor, 
-                                               torch.tensor, 
-                                               torch.tensor, 
-                                               torch.tensor]:
+def deep_poly(l:     torch.tensor, 
+              u:     torch.tensor,
+              param: torch.tensor) -> Tuple[torch.tensor, 
+                                            torch.tensor, 
+                                            torch.tensor, 
+                                            torch.tensor]:
     """
     Compute symbolic bounds from ReLU layer
     """
 
-    # Separate case Strictly positive ( 0 <= l, u ) and case Crossing ReLU ( l < 0 < u )
-    # (and implicitly the case Strictly negative ( l, u <= 0 ))
+    # Separate cases Strictly positive ( 0 <= l, u ) and Crossing ReLU ( l < 0 < u )
+    # (and implicitly Strictly negative ( l, u <= 0 ))
     mask_1 = l.ge(0)
     mask_2 = ~mask_1 & u.gt(0)
 
@@ -72,11 +72,11 @@ def deep_poly(l:        torch.tensor,
 #     assert ~(1 / lambda_[mask_2]**2).isnan().any()
 
     # ReLU resolution for weights
-    l_weight = l_weight * mask_l.unsqueeze(1)
-    u_weight = u_weight * mask_u.unsqueeze(1)
+    l_weight = torch.diag(mask_l)
+    u_weight = torch.diag(mask_u)
 
     # ReLU resolution for biases
-    l_bias = l_bias                * mask_l
-    u_bias = (u_bias - mask_2 * l) * mask_u
+    l_bias = torch.zeros_like(l)
+    u_bias = -lambda_ * l
 
     return l_weight, u_weight, l_bias, u_bias
