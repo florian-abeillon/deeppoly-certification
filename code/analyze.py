@@ -32,10 +32,6 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
     # Optimization
     optimizer = optim.Adam(params, lr=1)
-
-    print('Setup')
-    print(time.time() - TIME_START)
-    print()
     
     # while time.time() - TIME_START < TIME_LIMIT:
     while True:
@@ -49,11 +45,8 @@ def analyze(net, inputs, eps, true_label) -> bool:
 
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
-        print(time.time() - TIME_START)
         if err > 0:
             return True
-        print(err)
-        print()
 
         # Compute loss, and backpropagate to learn alpha parameters
         loss = torch.log(-err)
