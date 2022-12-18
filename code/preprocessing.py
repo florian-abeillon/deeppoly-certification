@@ -150,20 +150,6 @@ def linearize_resblock_paths(layer:       nn.Module,
     weight = torch.eye(in_dim_flat)
     bias = torch.zeros(in_dim_flat)
 
-    if not path_a:
-        path_a.append({
-            'type': nn.Linear.__name__,
-            'weight_bias': ( weight.clone(), bias.clone() ),
-            'sym_bounds': init_symbolic_bounds(weight.clone(), bias.clone())
-        })
-
-    elif not path_b:
-        path_b.append({
-            'type': nn.Linear.__name__,
-            'weight_bias': ( weight.clone(), bias.clone() ),
-            'sym_bounds': init_symbolic_bounds(weight.clone(), bias.clone())
-        })
-
     utils = {
         'path_a': path_a,
         'path_b': path_b
@@ -209,20 +195,6 @@ def linearize_layers(net:      nn.Sequential,
             weight, bias, in_dim, in_chans, in_dim_flat = linearize_conv(layer, in_dim)
 
 
-        # If ReLU layer
-        elif type_ == nn.ReLU:
-            
-            # Initialize alpha parameter as a vector filled with zeros
-            param = torch.zeros(in_dim_flat, requires_grad=True)
-            params.append(param)
-
-            # Add parameter
-            utils['param'] = param
-            layers.append(utils)
-
-            continue
-
-
         # If (Batch) Normalization layer
         elif type_ in [ Normalization, nn.BatchNorm2d ]:
 
@@ -238,14 +210,26 @@ def linearize_layers(net:      nn.Sequential,
             params.extend(params_resblock)
 
 
-        # If Flatten layer
-        elif type_ == nn.Flatten:
-
-            in_chans = 1
-            continue
-
 
         else:
+
+            # If ReLU layer
+            if type_ == nn.ReLU:
+                
+                # Initialize alpha parameter as a vector filled with zeros
+                param = torch.zeros(in_dim_flat, requires_grad=True)
+                params.append(param)
+
+                # Add parameter to previous layer
+                layers[-1]['relu_param'] = param
+
+
+            # If Flatten layer
+            elif type_ == nn.Flatten:
+
+                in_chans = 1
+
+
             continue
 
 
@@ -276,7 +260,7 @@ def add_final_layer(layers:     List[dict],
 
     last_layer = layers[-1]
 
-    assert last_layer['type'] != nn.ReLU.__name__
+    assert 'relu_param' not in last_layer
 
     weight, bias = last_layer['weight_bias']
     weight = torch.matmul(final_weight, weight)
@@ -304,7 +288,7 @@ def preprocess_bounds(layers: List[dict],
 
     if first_layer['type'] == Normalization.__name__:
 
-        weight, bias = first_layer ['weight_bias']
+        weight, bias = first_layer['weight_bias']
         l_0 = torch.matmul(weight, l_0) + bias
         u_0 = torch.matmul(weight, u_0) + bias
 

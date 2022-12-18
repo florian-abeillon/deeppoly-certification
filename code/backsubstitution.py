@@ -1,7 +1,6 @@
 from typing import List, Tuple
 
 import torch
-import torch.nn as nn
 
 from resnet import BasicBlock
 from utils import (
@@ -70,10 +69,12 @@ def backsubstitute(layers:     List[dict],
             sym_bounds_a = backsubstitute(layer['path_a'], sym_bounds=sym_bounds)
             sym_bounds_b = backsubstitute(layer['path_b'], sym_bounds=sym_bounds)
 
-            # Sum symbolic bounds back together
-            sym_bounds = tuple([ 
-                sym_bound_a + sym_bound_b
-                for sym_bound_a, sym_bound_b in zip(sym_bounds_a, sym_bounds_b) 
+            # Sum symbolic bounds back together (and remove initial bias, as it was passed to both path)
+            sym_bounds = tuple([
+                sym_bounds_a[0] + sym_bounds_b[0],
+                sym_bounds_a[1] + sym_bounds_b[1],
+                sym_bounds_a[2] + sym_bounds_b[2] - sym_bounds[2],
+                sym_bounds_a[3] + sym_bounds_b[3] - sym_bounds[3]
             ])
             
 
@@ -104,18 +105,21 @@ def get_symbolic_bounds(layers:      List[dict],
             _ = get_symbolic_bounds(layer['path_b'], l_0, u_0, prev_layers=prev_layers)
 
 
+        prev_layers.append(layer)
+
+
         # If layer is followed by a ReLU layer
-        if layer['type'] == nn.ReLU.__name__:
+        if 'relu_param' in layer:
+
+            # Re-initialize symbolic bounds using layer's weight/bias
+            layer['sym_bounds'] = init_symbolic_bounds(*layer['weight_bias'])
 
             # Backsubstituting until first layer, to get numerical bounds
             sym_bounds_backsub = backsubstitute(prev_layers)
             num_bounds = get_numerical_bounds(l_0, u_0, *sym_bounds_backsub)
 
             # Get symbolic bounds using DeepPoly ReLU approximation
-            layer['sym_bounds'] = deep_poly(*num_bounds, layer['param'])
-
-
-        prev_layers.append(layer)
+            layer['sym_bounds'] = deep_poly(*num_bounds, layer['relu_param'], *layer['sym_bounds'])
 
 
     return prev_layers
