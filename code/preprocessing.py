@@ -7,7 +7,7 @@ from networks import Normalization
 from resnet import BasicBlock
 from utils import (
     compute_out_dim, get_conv_matrix,
-    get_numerical_bounds, init_symbolic_bounds
+    init_symbolic_bounds
 )
 
 
@@ -204,7 +204,8 @@ def linearize_layers(net:      nn.Sequential,
         # If Residual block
         elif type_ == BasicBlock:
 
-            weight, bias, utils_resblock, params_resblock, in_dim, in_chans, in_dim_flat = linearize_resblock_paths(layer, in_dim, in_chans, in_dim_flat)
+            resblock = linearize_resblock_paths(layer, in_dim, in_chans, in_dim_flat)
+            weight, bias, utils_resblock, params_resblock, in_dim, in_chans, in_dim_flat = resblock
 
             utils.update(utils_resblock)
             params.extend(params_resblock)
@@ -250,21 +251,19 @@ def add_final_layer(layers:     List[dict],
     Artificially add a final layer, to subtract the true_label output node to every other output node
     """
 
-    # -1 on diagonal, and 1 for every element in the true_label column
-    final_weight = -torch.eye(out_dim)
-    final_weight[:, true_label] = 1.
-    final_weight = torch.cat([ final_weight[:true_label], final_weight[true_label + 1:] ])
-
-    # No bias
-    final_bias = torch.zeros(out_dim - 1)
-
     last_layer = layers[-1]
 
     assert 'relu_param' not in last_layer
 
     weight, bias = last_layer['weight_bias']
-    weight = torch.matmul(final_weight, weight)
-    bias = torch.matmul(final_weight, bias) + final_bias
+
+    weight_true_label = weight[true_label]
+    weight = torch.cat([ weight[:true_label], weight[true_label + 1:] ])
+    weight = weight_true_label - weight
+
+    bias_true_label = bias[true_label]
+    bias = torch.cat([ bias[:true_label], bias[true_label + 1:] ])
+    bias = bias_true_label - bias
 
     last_layer['sym_bounds'] = init_symbolic_bounds(weight, bias)
 

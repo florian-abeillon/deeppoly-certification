@@ -14,20 +14,32 @@ init_symbolic_bounds = lambda weight, bias: ( weight, weight.clone(), bias, bias
 
 
 
-def backsubstitute_bound(weight:          torch.tensor, 
+def get_pos_neg(weight: torch.tensor) -> Tuple[torch.tensor, 
+                                               torch.tensor]:
+    """
+    Return tensor of positive, and tensor of negative coefficients of weight
+    """
+    mask = weight > 0
+    weight_pos = weight *  mask
+    weight_neg = weight * ~mask
+    return weight_pos, weight_neg
+
+
+
+def backsubstitute_bound(weight_pos:      torch.tensor, 
+                         weight_neg:      torch.tensor, 
                          prev_weight:     torch.tensor, 
                          prev_weight_inv: torch.tensor) -> torch.tensor:
     """
     Backsubstitute bound using previous weights
     """
-    mask = weight > 0
-    return torch.matmul(weight *  mask, prev_weight) + \
-           torch.matmul(weight * ~mask, prev_weight_inv)
+    return torch.matmul(weight_pos, prev_weight) + \
+           torch.matmul(weight_neg, prev_weight_inv)
 
 
 
 # Compute numerical bound from symbolic one
-get_numerical_bound = lambda l, u, weight, bias: backsubstitute_bound(weight, l, u) + bias
+get_numerical_bound = lambda l, u, weight, bias: backsubstitute_bound(*get_pos_neg(weight), l, u) + bias
 
 
 def get_numerical_bounds(l_0:      torch.tensor, 

@@ -5,7 +5,8 @@ import torch
 from resnet import BasicBlock
 from utils import (
     backsubstitute_bound, deep_poly, 
-    get_numerical_bounds, init_symbolic_bounds
+    get_numerical_bounds, get_pos_neg,
+    init_symbolic_bounds
 )
 
 
@@ -24,17 +25,19 @@ def backsubstitute_step(l_weight:      torch.tensor,
     """
     Backpropagate symbolic bounds using ReLU ones
     """
-
+    
     # Update lower bounds
+    l_weight_pos, l_weight_neg = get_pos_neg(l_weight)
     l_weight, l_bias = (
-        backsubstitute_bound(l_weight, prev_l_weight, prev_u_weight),
-        backsubstitute_bound(l_weight, prev_l_bias,   prev_u_bias) + l_bias
+        backsubstitute_bound(l_weight_pos, l_weight_neg, prev_l_weight, prev_u_weight),
+        backsubstitute_bound(l_weight_pos, l_weight_neg, prev_l_bias,   prev_u_bias) + l_bias
     )
 
     # Update upper bounds
+    u_weight_pos, u_weight_neg = get_pos_neg(u_weight)
     u_weight, u_bias = (
-        backsubstitute_bound(u_weight, prev_u_weight, prev_l_weight),
-        backsubstitute_bound(u_weight, prev_u_bias,   prev_l_bias) + u_bias
+        backsubstitute_bound(u_weight_pos, u_weight_neg, prev_u_weight, prev_l_weight),
+        backsubstitute_bound(u_weight_pos, u_weight_neg, prev_u_bias,   prev_l_bias) + u_bias
     )
     
     return l_weight, u_weight, l_bias, u_bias

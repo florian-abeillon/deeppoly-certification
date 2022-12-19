@@ -14,8 +14,6 @@ from utils import (
     get_numerical_bound
 )
 
-torch.autograd.set_detect_anomaly(True)
-
 
 
 def analyze(net, inputs, eps, true_label) -> bool:
@@ -33,12 +31,10 @@ def analyze(net, inputs, eps, true_label) -> bool:
     # Optimization
     optimizer = optim.Adam(params, lr=1)
     
-    # while time.time() - TIME_START < TIME_LIMIT:
-    while True:
+    while time.time() - TIME_START < TIME_LIMIT:
         optimizer.zero_grad()
 
         layers_linearized = get_symbolic_bounds(layers, l_0, u_0, prev_layers=[])
-        # layers_linearized = add_sym_bounds(layers, l_0, u_0, prev_layers)
         sym_bounds = backsubstitute(layers_linearized)
         l_weight, l_bias = sym_bounds[0], sym_bounds[2]
         l = get_numerical_bound(l_0, u_0, l_weight, l_bias)
