@@ -32,13 +32,17 @@ def analyze(net, inputs, eps, true_label) -> bool:
     optimizer = optim.Adam(params, lr=1)
     
     # while time.time() - TIME_START < TIME_LIMIT:
-    while time.time() - TIME_START < 120:
+    # while time.time() - TIME_START < 120:
+    while True:
         optimizer.zero_grad()
 
+        start = time.process_time()
         layers_linearized = add_sym_bounds(layers, l_0, u_0)
         sym_bounds = backsubstitute(layers_linearized)
         l, _ = get_numerical_bounds(l_0, u_0, *sym_bounds)
+        print("Calculating bounds took", time.process_time() - start, "seconds")
 
+        start = time.process_time()
         # Errors whenever at least one output upper bound is greater than lower bound of true_label
         err = torch.min(l)
         print(err)
@@ -49,5 +53,6 @@ def analyze(net, inputs, eps, true_label) -> bool:
         loss = torch.log(-err)
         loss.backward()
         optimizer.step()
+        print("Backpropagation took", time.process_time() - start, "seconds")
 
     return False

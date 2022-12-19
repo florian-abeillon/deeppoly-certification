@@ -38,8 +38,11 @@ def backsubstitute_bound(weight:          torch.tensor,
     Backsubstitute bound using previous weights
     """
     weight_pos, weight_neg = get_pos_neg(weight)
-    return torch.matmul(weight_pos, prev_weight) + \
-           torch.matmul(weight_neg, prev_weight_inv)
+    if weight_pos.is_sparse:
+        return torch.sparse.mm(weight_pos, prev_weight) + \
+           torch.sparse.mm(weight_neg, prev_weight_inv)
+    return torch.matmul(weight_pos, prev_weight.to_dense()) + \
+           torch.matmul(weight_neg, prev_weight_inv.to_dense())
 
 
 
@@ -81,7 +84,7 @@ def deep_poly(l:        torch.tensor,
     alpha = torch.sigmoid(param)
     mask_l = mask_1 + mask_2 * alpha
 
-    lambda_ = u / (u - l)
+    lambda_ = u / (u - l + 1e-6)
     mask_u = mask_1 + mask_2 * lambda_
 
     # ReLU resolution for weights

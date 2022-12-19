@@ -6,6 +6,9 @@ import torch
 from analyze import analyze
 from networks import NormalizedResnet, get_net_name, get_network
 
+import cProfile
+import time
+
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
@@ -74,4 +77,8 @@ def main():
 
 
 if __name__ == '__main__':
+    # cProfile.run("main()", filename="profile.out")
+    start = time.time()
     main()
+    end = time.time()
+    print(end - start)

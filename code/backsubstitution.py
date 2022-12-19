@@ -61,7 +61,9 @@ def linearize_resblock(layer: nn.Module) -> List[dict]:
         l_weight_b, u_weight_b, l_bias_b, u_bias_b = layer_b['sym_bounds']
 
         # Concatenate weights and biases
+        # l_weight = torch.block_diag(l_weight_a, l_weight_b).to_sparse()
         l_weight = torch.block_diag(l_weight_a, l_weight_b)
+        # u_weight = torch.block_diag(u_weight_a, u_weight_b).to_sparse()
         u_weight = torch.block_diag(u_weight_a, u_weight_b)
         l_bias = torch.cat([ l_bias_a, l_bias_b ])
         u_bias = torch.cat([ u_bias_a, u_bias_b ])

@@ -1,4 +1,5 @@
 from typing import List, Tuple
+import math
 
 import torch
 import torch.nn as nn
@@ -89,7 +90,7 @@ def linearize_norm(layer:    nn.Module,
         gamma = layer.weight.detach()
 
         # Build weight and bias
-        weight = gamma / torch.sqrt(var + eps)
+        weight = gamma / torch.tensor([math.sqrt(v + eps) for v in var.numpy()])
         bias = layer.bias.detach()
         bias -= mean * weight
 
