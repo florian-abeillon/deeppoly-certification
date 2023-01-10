@@ -1,0 +1,109 @@
+net,test case,ground truth,your output,your runtime,your point
+net1,img10_0.0406.txt,not verified,timeout (not verified),60,0
+net1,img1_0.0282.txt,not verified,not verified,61.084,0
+net1,img2_0.0181.txt,verified,verified,1.236,1
+net1,img3_0.0091.txt,verified,verified,1.292,1
+net1,img4_0.0102.txt,not verified,not verified,61.286,0
+net1,img5_0.0121.txt,verified,verified,1.25,1
+net1,img6_0.0153.txt,verified,verified,0.741,1
+net1,img7_0.0125.txt,not verified,timeout (not verified),60,0
+net1,img8_0.0355.txt,verified,verified,1.33,1
+net1,img9_0.0502.txt,verified,verified,1.241,1
+net2,img10_0.1455.txt,verified,verified,1.334,1
+net2,img1_0.2105.txt,not verified,timeout (not verified),60,0
+net2,img2_0.2009.txt,verified,verified,1.288,1
+net2,img3_0.2301.txt,not verified,timeout (not verified),60,0
+net2,img4_0.1805.txt,verified,verified,1.039,1
+net2,img5_0.2059.txt,verified,verified,1.026,1
+net2,img6_0.0082.txt,verified,verified,1.084,1
+net2,img7_0.1022.txt,verified,verified,1.055,1
+net2,img8_0.2009.txt,not verified,not verified,61.018,0
+net2,img9_0.1994.txt,verified,verified,1.078,1
+net3,img10_0.0041.txt,not verified,timeout (not verified),60,0
+net3,img1_0.0014.txt,verified,verified,1.054,1
+net3,img2_0.0025.txt,not verified,not verified,60.866,0
+net3,img3_0.0090.txt,verified,verified,0.828,1
+net3,img4_0.0028.txt,verified,verified,0.915,1
+net3,img5_0.0029.txt,not verified,not verified,61.02,0
+net3,img6_0.0205.txt,verified,verified,0.963,1
+net3,img7_0.0091.txt,verified,verified,1.046,1
+net3,img8_0.0033.txt,verified,verified,1.02,1
+net3,img9_0.0025.txt,not verified,timeout (not verified),60,0
+net4,img10_0.0197.txt,verified,verified,1.113,1
+net4,img1_0.1432.txt,verified,verified,1.059,1
+net4,img2_0.1005.txt,verified,verified,0.789,1
+net4,img3_0.1905.txt,not verified,timeout (not verified),60,0
+net4,img4_0.1502.txt,verified,verified,0.917,1
+net4,img5_0.0092.txt,verified,verified,0.992,1
+net4,img6_0.1741.txt,not verified,not verified,61.014,0
+net4,img7_0.1910.txt,verified,verified,1.031,1
+net4,img8_0.1681.txt,not verified,timeout (not verified),60,0
+net4,img9_0.0097.txt,verified,verified,1.079,1
+net5,img10_0.0184.txt,not verified,not verified,61.114,0
+net5,img1_0.0852.txt,verified,verified,2.378,1
+net5,img2_0.0588.txt,verified,verified,2.325,1
+net5,img3_0.0205.txt,not verified,not verified,61.098,0
+net5,img4_0.0136.txt,not verified,timeout (not verified),60,0
+net5,img5_0.0108.txt,verified,verified,1.407,1
+net5,img6_0.0693.txt,verified,verified,1.444,1
+net5,img7_0.0194.txt,verified,verified,1.48,1
+net5,img8_0.0174.txt,verified,verified,1.577,1
+net5,img9_0.0159.txt,not verified,timeout (not verified),60,0
+net6,img10_0.0305.txt,not verified,timeout (not verified),60,0
+net6,img1_0.0315.txt,verified,verified,6.19,1
+net6,img2_0.0315.txt,verified,verified,5.42,1
+net6,img3_0.0315.txt,verified,verified,9.226,1
+net6,img4_0.0302.txt,verified,verified,4.476,1
+net6,img5_0.0103.txt,not verified,timeout (not verified),60,0
+net6,img6_0.0104.txt,not verified,timeout (not verified),60,0
+net6,img7_0.0173.txt,verified,verified,2.131,1
+net6,img8_0.0126.txt,verified,verified,2.04,1
+net6,img9_0.0103.txt,verified,verified,2.331,1
+net7,img10_0.0381.txt,verified,verified,1.937,1
+net7,img1_0.0540.txt,verified,verified,1.986,1
+net7,img2_0.0344.txt,verified,verified,1.892,1
+net7,img3_0.2281.txt,not verified,timeout (not verified),60,0
+net7,img4_0.0258.txt,verified,verified,1.67,1
+net7,img5_0.2302.txt,not verified,not verified,61.315,0
+net7,img6_0.2004.txt,verified,verified,3.282,1
+net7,img7_0.1895.txt,verified,verified,5.231,1
+net7,img8_0.1581.txt,verified,verified,3.208,1
+net7,img9_0.2502.txt,not verified,not verified,61.18,0
+net8,img10_0.0092.txt,not verified,timeout (not verified),60,0
+net8,img1_0.0082.txt,verified,timeout (not verified),60,0
+net8,img2_0.0081.txt,verified,verified,4.153,1
+net8,img3_0.0082.txt,verified,not verified,61.069,0
+net8,img4_0.0083.txt,not verified,timeout (not verified),60,0
+net8,img5_0.0075.txt,verified,verified,7.335,1
+net8,img6_0.0077.txt,verified,verified,12.694,1
+net8,img7_0.0078.txt,not verified,timeout (not verified),60,0
+net8,img8_0.0091.txt,verified,verified,19.125,1
+net8,img9_0.0090.txt,verified,verified,12.454,1
+net9,img10_0.0042.txt,verified,verified,29.965,1
+net9,img1_0.0037.txt,verified,verified,24.412,1
+net9,img2_0.0038.txt,not verified,timeout (not verified),60,0
+net9,img3_0.0037.txt,verified,verified,51.56,1
+net9,img4_0.0041.txt,verified,timeout (not verified),60,0
+net9,img5_0.0043.txt,verified,verified,43.51,1
+net9,img6_0.0044.txt,not verified,timeout (not verified),60,0
+net9,img7_0.0042.txt,verified,verified,46.164,1
+net9,img8_0.0036.txt,not verified,timeout (not verified),60,0
+net9,img9_0.0043.txt,not verified,timeout (not verified),60,0
+net10,img10_0.0017.txt,verified,verified,4.696,1
+net10,img1_0.0015.txt,verified,verified,36.824,1
+net10,img2_0.0015.txt,verified,verified,8.256,1
+net10,img3_0.0015.txt,not verified,timeout (not verified),60,0
+net10,img4_0.0016.txt,verified,verified,28.694,1
+net10,img5_0.0016.txt,verified,timeout (not verified),60,0
+net10,img6_0.0016.txt,verified,verified,13.441,1
+net10,img7_0.0016.txt,not verified,timeout (not verified),60,0
+net10,img8_0.0017.txt,verified,verified,30.269,1
+net10,img9_0.0017.txt,verified,verified,21.401,1
+
+total points: 63
+
+percentiles:
+25-th: 18.5
+50-th: 43.0
+75-th: 57.5
+90-th: 62.4
